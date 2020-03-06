@@ -1,0 +1,16 @@
+[package]
+name = "peepmatic"
+version = "0.1.0"
+authors = ["Nick Fitzgerald <fitzgen@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+
+# Waiting on the 10.0.0 release...
+[dependencies.wast]
+git = "https://github.com/bytecodealliance/wat.git"
+rev = "06ecb91f79b583e68a9d90c300bfbd6bfd0fb06b"
+
+[workspace]
