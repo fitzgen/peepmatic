@@ -114,7 +114,8 @@ pub enum Boolean {
 
 /// A symbolic constant.
 ///
-/// These are identifiers that start with an upper-case letter: `$C`.
+/// These are identifiers containing uppercase letters: `$C`, `$MY-CONST`,
+/// `$CONSTANT1`.
 #[derive(Debug)]
 pub struct Constant<'a>(pub Id<'a>);
 

@@ -135,7 +135,7 @@ impl<'a> Parse<'a> for Integer {
                     .or_else(|_| u128::from_str_radix(s, base).map(|i| i as i128));
                 return match val {
                     Ok(n) => Ok((Integer(n), rest)),
-                    Err(_) => Err(c.error("invalid integer: constant out of range")),
+                    Err(_) => Err(c.error("invalid integer: out of range")),
                 };
             }
             Err(c.error("expected an integer"))
@@ -168,15 +168,21 @@ impl<'a> Peek for Boolean {
 impl<'a> Parse<'a> for Constant<'a> {
     fn parse(p: Parser<'a>) -> ParseResult<Self> {
         let id = Id::parse(p)?;
-        if id.name().chars().nth(0).unwrap().is_uppercase() {
+        if id
+            .name()
+            .chars()
+            .all(|c| !c.is_alphabetic() || c.is_uppercase())
+        {
             Ok(Constant(id))
         } else {
-            let first = id.name().chars().nth(0).unwrap().to_uppercase();
-            let rest_index = id.name().char_indices().nth(0).unwrap().0;
-            let rest = &id.name()[rest_index..];
+            let upper = id
+                .name()
+                .chars()
+                .flat_map(|c| c.to_uppercase())
+                .collect::<String>();
             Err(p.error(format!(
-                "symbolic constants must start with an upper-case letter like ${}{}",
-                first, rest
+                "symbolic constants must start with an upper-case letter like ${}",
+                upper
             )))
         }
     }
@@ -185,7 +191,7 @@ impl<'a> Parse<'a> for Constant<'a> {
 impl<'a> Peek for Constant<'a> {
     fn peek(c: Cursor) -> bool {
         if let Some((id, _rest)) = c.id() {
-            id.chars().nth(0).unwrap().is_uppercase()
+            id.chars().all(|c| !c.is_alphabetic() || c.is_uppercase())
         } else {
             false
         }
@@ -199,15 +205,21 @@ impl<'a> Peek for Constant<'a> {
 impl<'a> Parse<'a> for Variable<'a> {
     fn parse(p: Parser<'a>) -> ParseResult<Self> {
         let id = Id::parse(p)?;
-        if id.name().chars().nth(0).unwrap().is_lowercase() {
+        if id
+            .name()
+            .chars()
+            .all(|c| !c.is_alphabetic() || c.is_lowercase())
+        {
             Ok(Variable(id))
         } else {
-            let first = id.name().chars().nth(0).unwrap().to_lowercase();
-            let rest_index = id.name().char_indices().nth(0).unwrap().0;
-            let rest = &id.name()[rest_index..];
+            let lower = id
+                .name()
+                .chars()
+                .flat_map(|c| c.to_lowercase())
+                .collect::<String>();
             Err(p.error(format!(
-                "symbolic variables must start with an lower-case letter like ${}{}",
-                first, rest
+                "variables must start with an lower-case letter like ${}",
+                lower
             )))
         }
     }
@@ -216,7 +228,7 @@ impl<'a> Parse<'a> for Variable<'a> {
 impl<'a> Peek for Variable<'a> {
     fn peek(c: Cursor) -> bool {
         if let Some((id, _rest)) = c.id() {
-            id.chars().nth(0).unwrap().is_lowercase()
+            id.chars().all(|c| !c.is_alphabetic() || c.is_lowercase())
         } else {
             false
         }
@@ -514,16 +526,17 @@ mod test {
                 "$C2",
                 "$X",
                 "$Y",
-                "$SomeConstant",
-                "$Some-Constant",
-                "$Some_Constant",
-                "$Some_constant",
+                "$SOME-CONSTANT",
+                "$SOME_CONSTANT",
             }
             err {
                 "",
                 "zzz",
                 "$",
                 "$variable",
+                "$Some-Constant",
+                "$Some_Constant",
+                "$Some_constant",
             }
         }
         parse_constraint<Constraint> {
@@ -541,7 +554,7 @@ mod test {
             ok {
                 "1234",
                 "true",
-                "$Constant",
+                "$CONSTANT",
                 "$variable",
             }
             err {
@@ -617,7 +630,7 @@ mod test {
                 "",
                 "()",
                 "$var",
-                "$Const",
+                "$CONST",
                 "(ishl $x $(log2 $C))",
             }
         }
@@ -632,7 +645,7 @@ mod test {
                 "",
                 "()",
                 "$var",
-                "$Const",
+                "$CONST",
             }
         }
         parse_operator<Operator> {
@@ -707,7 +720,7 @@ mod test {
                 "1234",
                 "()",
                 "$var",
-                "$Const",
+                "$CONST",
             }
         }
         parse_rhs<Rhs> {
@@ -771,7 +784,8 @@ mod test {
             err {
                 "zzz",
                 "$",
-                "$Constant",
+                "$CONSTANT",
+                "$fooBar",
             }
         }
     }
