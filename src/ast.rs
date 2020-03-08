@@ -194,6 +194,9 @@ pub struct Precondition<'a> {
 pub enum Constraint {
     /// Is the operand a power of two?
     IsPowerOfTwo,
+
+    /// Check the bit width of a value.
+    BitWidth,
 }
 
 /// An operand of a precondition's constraint.

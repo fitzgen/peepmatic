@@ -8,6 +8,7 @@ mod tok {
     use wast::{custom_keyword, custom_reserved};
 
     custom_keyword!(ashr);
+    custom_keyword!(bit_width = "bit-width");
     custom_keyword!(bor);
     custom_reserved!(dollar = "$");
     custom_keyword!(r#false = "false");
@@ -312,6 +313,10 @@ impl<'a> Parse<'a> for Constraint {
             p.parse::<tok::is_power_of_two>()?;
             return Ok(Constraint::IsPowerOfTwo);
         }
+        if p.peek::<tok::bit_width>() {
+            p.parse::<tok::bit_width>()?;
+            return Ok(Constraint::BitWidth);
+        }
         Err(p.error("expected a precondition constraint"))
     }
 }
@@ -524,6 +529,7 @@ mod test {
         parse_constraint<Constraint> {
             ok {
                 "is-power-of-two",
+                "bit-width",
             }
             err {
                 "",
