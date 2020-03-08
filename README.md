@@ -6,6 +6,8 @@
 **`peepmatic` is a DSL and compiler for generating peephole optimizers for
 [Cranelift][].**
 
+![Rust](https://github.com/fitzgen/peepmatic/workflows/Rust/badge.svg)
+
 The user writes a set of optimizations in the DSL, and then `peepmatic` compiles
 the set of optimizations into an efficient peephole optimizer:
 
