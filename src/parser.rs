@@ -1,3 +1,50 @@
+/*!
+
+This module implements parsing the DSL text format. It implements the
+`wast::Parse` trait for all of our AST types.
+
+The grammar for the DSL is given below:
+
+```ebnf
+<optimizations> ::= <optimization>*
+
+<optimization> ::= '(' '=>' <lhs> <rhs> ')'
+
+<left-hand-side> ::= <pattern>
+                   | '(' 'when' <pattern> <precondition>* ')'
+
+<pattern> ::= <value-literal>
+            | <constant>
+            | <operation<pattern>>
+            | <variable>
+
+<value-literal> ::= <integer>
+                  | <boolean>
+
+<boolean> ::= 'true' | 'false'
+
+<operation<T>> ::= '(' <operator> <T>* ')'
+
+<precondition> ::= '(' <constraint> <constraint-operands>* ')'
+
+<constraint-operand> ::= <value-literal>
+                       | <constant>
+                       | <variable>
+
+<rhs> ::= <value-literal>
+        | <constant>
+        | <variable>
+        | <unquote>
+        | <operation<rhs>>
+
+<unquote> ::= '$' '(' <unquote-operator> <unquote-operand>* ')'
+
+<unquote-operand> ::= <value-literal>
+                    | <constant>
+```
+
+ */
+
 use crate::ast::*;
 use wast::{
     parser::{Cursor, Parse, Parser, Peek, Result as ParseResult},

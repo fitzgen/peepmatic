@@ -2,20 +2,12 @@ use wast::{Id, Span};
 
 /// A set of optimizations.
 ///
-/// This is the top-level production, and root AST node.
-///
-/// ```text
-/// <optimizations> ::= <optimization>*
-/// ```
+/// This is the root AST node.
 #[derive(Debug)]
 pub struct Optimizations<'a>(pub Vec<Optimization<'a>>);
 
 /// A complete optimization: a left-hand side to match against and a right-hand
 /// side replacement.
-///
-/// ```text
-/// <optimization> ::= '(' '=>' <lhs> <rhs> ')'
-/// ```
 #[derive(Debug)]
 pub struct Optimization<'a> {
     /// Where this `Optimization` was defined.
@@ -35,11 +27,6 @@ pub struct Optimization<'a> {
 /// A left-hand side has two parts: a structural pattern for describing
 /// candidate instruction sequences, and zero or more preconditions that add
 /// additional constraints upon instruction sequences matched by the pattern.
-///
-/// ```text
-/// <left-hand-side> ::= <pattern>
-///                    | '(' 'when' <pattern> <precondition>* ')'
-/// ```
 #[derive(Debug)]
 pub struct Lhs<'a> {
     /// A pattern that describes sequences of instructions to match.
@@ -53,13 +40,6 @@ pub struct Lhs<'a> {
 
 /// A structural pattern, potentially with wildcard variables for matching whole
 /// subtrees.
-///
-/// ```text
-/// <pattern> ::= <value-literal>
-///             | <constant>
-///             | <operation-pattern>
-///             | <variable>
-/// ```
 #[derive(Debug)]
 pub enum Pattern<'a> {
     /// A specific value. These are written as `1234` or `0x1234` or `true` or
@@ -80,11 +60,6 @@ pub enum Pattern<'a> {
 }
 
 /// An integer or boolean value literal.
-///
-/// ```text
-/// <value> ::= <integer>
-///           | <boolean>
-/// ```
 #[derive(Debug)]
 pub enum ValueLiteral {
     /// An integer value.
@@ -99,10 +74,6 @@ pub enum ValueLiteral {
 pub struct Integer(pub i128);
 
 /// A boolean literal.
-///
-/// ```text
-/// <boolean> ::= 'true' | 'false'
-/// ```
 #[derive(Debug)]
 pub enum Boolean {
     /// The `true` value.
@@ -128,10 +99,6 @@ pub struct Constant<'a>(pub Id<'a>);
 pub struct Variable<'a>(pub Id<'a>);
 
 /// An operation with an operator, and operands of type `T`.
-///
-/// ```text
-/// operation<T> ::= '(' <operator> <T>* ')'
-/// ```
 #[derive(Debug)]
 pub struct Operation<T> {
     /// The operator for this operation, e.g. `imul` or `iadd`.
@@ -177,10 +144,6 @@ pub enum Operator {
 
 /// A precondition adds additional constraints to a pattern, such as "$C must be
 /// a power of two".
-///
-/// ```text
-/// <precondition> ::= '(' <constraint> <constraint-operands>* ')'
-/// ```
 #[derive(Debug)]
 pub struct Precondition<'a> {
     /// The constraint operator.
@@ -201,12 +164,6 @@ pub enum Constraint {
 }
 
 /// An operand of a precondition's constraint.
-///
-/// ```text
-/// <constraint-operand> ::= <value-literal>
-///                        | <constant>
-///                        | <variable>
-/// ```
 #[derive(Debug)]
 pub enum ConstraintOperand<'a> {
     /// A value literal operand.
@@ -221,14 +178,6 @@ pub enum ConstraintOperand<'a> {
 
 /// The right-hand side of an optimization that contains the instructions to
 /// replace any matched left-hand side with.
-///
-/// ```text
-/// <rhs> ::= <value-literal>
-///         | <constant>
-///         | <variable>
-///         | <unquote>
-///         | <operation<rhs>>
-/// ```
 #[derive(Debug)]
 pub enum Rhs<'a> {
     /// A value literal right-hand side.
@@ -262,10 +211,6 @@ pub enum Rhs<'a> {
 /// For example, given the unqouted right-hand side `$(log2 $C)`, we replace any
 /// instructions that match its left-hand side with the compile-time result of
 /// `log2($C)` (the left-hand side must match and bind the constant `$C`).
-///
-/// ```text
-/// <unquote> ::= '$' '(' <unquote-operator> <unquote-operand>* ')'
-/// ```
 #[derive(Debug)]
 pub struct Unquote<'a> {
     /// The operator for this unquote operation.
@@ -283,11 +228,6 @@ pub enum UnquoteOperator {
 }
 
 /// An operand for an unquote operation.
-///
-/// ```text
-/// <unquote-operand> ::= <value-literal>
-///                     | <constant>
-/// ```
 #[derive(Debug)]
 pub enum UnquoteOperand<'a> {
     /// A value-literal operand.
