@@ -152,6 +152,9 @@ pub enum Operator {
     /// `ashr`
     Ashr,
 
+    /// `bor`
+    Bor,
+
     /// `iadd`
     Iadd,
 

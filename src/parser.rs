@@ -8,6 +8,7 @@ mod tok {
     use wast::{custom_keyword, custom_reserved};
 
     custom_keyword!(ashr);
+    custom_keyword!(bor);
     custom_reserved!(dollar = "$");
     custom_keyword!(r#false = "false");
     custom_keyword!(iadd);
@@ -256,6 +257,10 @@ impl<'a> Parse<'a> for Operator {
         if p.peek::<tok::ashr>() {
             p.parse::<tok::ashr>()?;
             return Ok(Operator::Ashr);
+        }
+        if p.peek::<tok::bor>() {
+            p.parse::<tok::bor>()?;
+            return Ok(Operator::Bor);
         }
         if p.peek::<tok::iadd>() {
             p.parse::<tok::iadd>()?;
@@ -627,6 +632,7 @@ mod test {
         parse_operator<Operator> {
             ok {
                 "ashr",
+                "bor",
                 "iadd",
                 "iadd_imm",
                 "iconst",
