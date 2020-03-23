@@ -319,7 +319,7 @@ fn create_type_methods(variants: &[OperatorVariant]) -> impl quote::ToTokens {
     quote! {
         pub(crate) fn result_type<'a>(
             &self,
-            context: &mut crate::verify::Context<'a>,
+            context: &mut crate::verify::TypingContext<'a>,
             span: wast::Span,
         ) -> crate::verify::TypeVar<'a> {
             match *self {
@@ -329,7 +329,7 @@ fn create_type_methods(variants: &[OperatorVariant]) -> impl quote::ToTokens {
 
         pub(crate) fn immediate_types<'a>(
             &self,
-            context: &mut crate::verify::Context<'a>,
+            context: &mut crate::verify::TypingContext<'a>,
             span: wast::Span,
             types: &mut impl Extend<crate::verify::TypeVar<'a>>,
         ) {
@@ -340,7 +340,7 @@ fn create_type_methods(variants: &[OperatorVariant]) -> impl quote::ToTokens {
 
         pub(crate) fn param_types<'a>(
             &self,
-            context: &mut crate::verify::Context<'a>,
+            context: &mut crate::verify::TypingContext<'a>,
             span: wast::Span,
             types: &mut impl Extend<crate::verify::TypeVar<'a>>,
         ) {
