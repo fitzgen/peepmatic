@@ -1,4 +1,13 @@
-use wast::{Id, Span};
+use peepmatic_macro::{peepmatic, Span};
+use wast::Id;
+
+/// A trait for getting the span where an AST node was defined.
+///
+/// This is mostly implemented automatically with `derive(Span)` -- see
+/// `derive_span` in `crates/macro/src/lib.rs`.
+pub(crate) trait Span {
+    fn span(&self) -> wast::Span;
+}
 
 /// A set of optimizations.
 ///
@@ -8,10 +17,10 @@ pub struct Optimizations<'a>(pub Vec<Optimization<'a>>);
 
 /// A complete optimization: a left-hand side to match against and a right-hand
 /// side replacement.
-#[derive(Debug)]
+#[derive(Debug, Span)]
 pub struct Optimization<'a> {
     /// Where this `Optimization` was defined.
-    pub span: Span,
+    pub span: wast::Span,
 
     /// The left-hand side that matches when this optimization applies.
     pub lhs: Lhs<'a>,
@@ -27,8 +36,11 @@ pub struct Optimization<'a> {
 /// A left-hand side has two parts: a structural pattern for describing
 /// candidate instruction sequences, and zero or more preconditions that add
 /// additional constraints upon instruction sequences matched by the pattern.
-#[derive(Debug)]
+#[derive(Debug, Span)]
 pub struct Lhs<'a> {
+    /// Where this `Lhs` was defined.
+    pub span: wast::Span,
+
     /// A pattern that describes sequences of instructions to match.
     pub pattern: Pattern<'a>,
 
@@ -40,7 +52,7 @@ pub struct Lhs<'a> {
 
 /// A structural pattern, potentially with wildcard variables for matching whole
 /// subtrees.
-#[derive(Debug)]
+#[derive(Debug, Span)]
 pub enum Pattern<'a> {
     /// A specific value. These are written as `1234` or `0x1234` or `true` or
     /// `false`.
@@ -60,7 +72,7 @@ pub enum Pattern<'a> {
 }
 
 /// An integer or boolean value literal.
-#[derive(Debug)]
+#[derive(Debug, Span)]
 pub enum ValueLiteral {
     /// An integer value.
     Integer(Integer),
@@ -70,37 +82,58 @@ pub enum ValueLiteral {
 }
 
 /// An integer literal.
-#[derive(Debug)]
-pub struct Integer(pub i128);
+#[derive(Debug, Span)]
+pub struct Integer {
+    /// Where this `Integer` was defined.
+    pub span: wast::Span,
+
+    /// The integer value.
+    pub value: i128,
+}
 
 /// A boolean literal.
-#[derive(Debug)]
-pub enum Boolean {
-    /// The `true` value.
-    True,
+#[derive(Debug, Span)]
+pub struct Boolean {
+    /// Where this `Boolean` was defined.
+    pub span: wast::Span,
 
-    /// The `false` value.
-    False,
+    /// The boolean value.
+    pub value: bool,
 }
 
 /// A symbolic constant.
 ///
 /// These are identifiers containing uppercase letters: `$C`, `$MY-CONST`,
 /// `$CONSTANT1`.
-#[derive(Debug)]
-pub struct Constant<'a>(pub Id<'a>);
+#[derive(Debug, Span)]
+pub struct Constant<'a> {
+    /// Where this `Constant` was defined.
+    pub span: wast::Span,
+
+    /// This constant's identifier.
+    pub id: Id<'a>,
+}
 
 /// A variable that matches any subtree.
 ///
 /// Duplicate uses of the same variable constrain each occurrence's match to
 /// being the same as each other occurrence as well, e.g. `(iadd $x $x)` matches
 /// `(iadd 5 5)` but not `(iadd 1 2)`.
-#[derive(Debug)]
-pub struct Variable<'a>(pub Id<'a>);
+#[derive(Debug, Span)]
+pub struct Variable<'a> {
+    /// Where this `Variable` was defined.
+    pub span: wast::Span,
+
+    /// This variable's identifier.
+    pub id: Id<'a>,
+}
 
 /// An operation with an operator, and operands of type `T`.
-#[derive(Debug)]
+#[derive(Debug, Span)]
 pub struct Operation<T> {
+    /// The span where this operation was written.
+    pub span: wast::Span,
+
     /// The operator for this operation, e.g. `imul` or `iadd`.
     pub operator: Operator,
 
@@ -115,37 +148,49 @@ pub struct Operation<T> {
 /// An operator.
 ///
 /// These are a subset of Cranelift IR's operators.
+#[peepmatic]
 #[derive(Debug)]
 pub enum Operator {
     /// `ashr`
+    #[peepmatic(params(iNN, iNN), result(iNN))]
     Ashr,
 
     /// `bor`
+    #[peepmatic(params(iNN, iNN), result(iNN))]
     Bor,
 
     /// `iadd`
+    #[peepmatic(params(iNN, iNN), result(iNN))]
     Iadd,
 
     /// `iadd_imm`
+    #[peepmatic(immediates(iNN), params(iNN), result(iNN))]
     IaddImm,
 
     /// `iconst`
+    #[peepmatic(immediates(iNN), result(iNN))]
     Iconst,
 
     /// `imul`
+    #[peepmatic(params(iNN, iNN), result(iNN))]
     Imul,
 
     /// `ishl`
+    #[peepmatic(params(iNN, iNN), result(iNN))]
     Ishl,
 
     /// `sshr`
+    #[peepmatic(params(iNN, iNN), result(iNN))]
     Sshr,
 }
 
 /// A precondition adds additional constraints to a pattern, such as "$C must be
 /// a power of two".
-#[derive(Debug)]
+#[derive(Debug, Span)]
 pub struct Precondition<'a> {
+    /// Where this `Precondition` was defined.
+    pub span: wast::Span,
+
     /// The constraint operator.
     pub constraint: Constraint,
 
@@ -164,7 +209,7 @@ pub enum Constraint {
 }
 
 /// An operand of a precondition's constraint.
-#[derive(Debug)]
+#[derive(Debug, Span)]
 pub enum ConstraintOperand<'a> {
     /// A value literal operand.
     ValueLiteral(ValueLiteral),
@@ -178,7 +223,7 @@ pub enum ConstraintOperand<'a> {
 
 /// The right-hand side of an optimization that contains the instructions to
 /// replace any matched left-hand side with.
-#[derive(Debug)]
+#[derive(Debug, Span)]
 pub enum Rhs<'a> {
     /// A value literal right-hand side.
     ValueLiteral(ValueLiteral),
@@ -211,8 +256,11 @@ pub enum Rhs<'a> {
 /// For example, given the unqouted right-hand side `$(log2 $C)`, we replace any
 /// instructions that match its left-hand side with the compile-time result of
 /// `log2($C)` (the left-hand side must match and bind the constant `$C`).
-#[derive(Debug)]
+#[derive(Debug, Span)]
 pub struct Unquote<'a> {
+    /// Where this `Unquote` was defined.
+    pub span: wast::Span,
+
     /// The operator for this unquote operation.
     pub operator: UnquoteOperator,
 
@@ -228,7 +276,7 @@ pub enum UnquoteOperator {
 }
 
 /// An operand for an unquote operation.
-#[derive(Debug)]
+#[derive(Debug, Span)]
 pub enum UnquoteOperand<'a> {
     /// A value-literal operand.
     ValueLiteral(ValueLiteral),

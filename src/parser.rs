@@ -97,6 +97,7 @@ impl<'a> Parse<'a> for Optimization<'a> {
 
 impl<'a> Parse<'a> for Lhs<'a> {
     fn parse(p: Parser<'a>) -> ParseResult<Self> {
+        let span = p.cur_span();
         let mut preconditions = vec![];
         if p.peek::<wast::LParen>() && p.peek2::<tok::when>() {
             p.parens(|p| {
@@ -106,13 +107,16 @@ impl<'a> Parse<'a> for Lhs<'a> {
                     preconditions.push(p.parse()?);
                 }
                 Ok(Lhs {
+                    span,
                     pattern,
                     preconditions,
                 })
             })
         } else {
+            let span = p.cur_span();
             let pattern = p.parse()?;
             Ok(Lhs {
+                span,
                 pattern,
                 preconditions,
             })
@@ -175,13 +179,14 @@ impl Peek for ValueLiteral {
 
 impl<'a> Parse<'a> for Integer {
     fn parse(p: Parser<'a>) -> ParseResult<Self> {
+        let span = p.cur_span();
         p.step(|c| {
             if let Some((i, rest)) = c.integer() {
                 let (s, base) = i.val();
                 let val = i128::from_str_radix(s, base)
                     .or_else(|_| u128::from_str_radix(s, base).map(|i| i as i128));
                 return match val {
-                    Ok(n) => Ok((Integer(n), rest)),
+                    Ok(value) => Ok((Integer { span, value }, rest)),
                     Err(_) => Err(c.error("invalid integer: out of range")),
                 };
             }
@@ -192,11 +197,12 @@ impl<'a> Parse<'a> for Integer {
 
 impl<'a> Parse<'a> for Boolean {
     fn parse(p: Parser<'a>) -> ParseResult<Self> {
+        let span = p.cur_span();
         if p.parse::<tok::r#true>().is_ok() {
-            return Ok(Boolean::True);
+            return Ok(Boolean { span, value: true });
         }
         if p.parse::<tok::r#false>().is_ok() {
-            return Ok(Boolean::False);
+            return Ok(Boolean { span, value: false });
         }
         Err(p.error("expected `true` or `false`"))
     }
@@ -214,13 +220,14 @@ impl<'a> Peek for Boolean {
 
 impl<'a> Parse<'a> for Constant<'a> {
     fn parse(p: Parser<'a>) -> ParseResult<Self> {
+        let span = p.cur_span();
         let id = Id::parse(p)?;
         if id
             .name()
             .chars()
             .all(|c| !c.is_alphabetic() || c.is_uppercase())
         {
-            Ok(Constant(id))
+            Ok(Constant { span, id })
         } else {
             let upper = id
                 .name()
@@ -251,13 +258,14 @@ impl<'a> Peek for Constant<'a> {
 
 impl<'a> Parse<'a> for Variable<'a> {
     fn parse(p: Parser<'a>) -> ParseResult<Self> {
+        let span = p.cur_span();
         let id = Id::parse(p)?;
         if id
             .name()
             .chars()
             .all(|c| !c.is_alphabetic() || c.is_lowercase())
         {
-            Ok(Variable(id))
+            Ok(Variable { span, id })
         } else {
             let lower = id
                 .name()
@@ -291,13 +299,18 @@ where
     T: Peek + Parse<'a>,
 {
     fn parse(p: Parser<'a>) -> ParseResult<Self> {
+        let span = p.cur_span();
         p.parens(|p| {
             let operator = p.parse()?;
             let mut operands = vec![];
             while p.peek::<T>() {
                 operands.push(p.parse()?);
             }
-            Ok(Operation { operator, operands })
+            Ok(Operation {
+                span,
+                operator,
+                operands,
+            })
         })
     }
 }
@@ -352,6 +365,7 @@ impl<'a> Parse<'a> for Operator {
 
 impl<'a> Parse<'a> for Precondition<'a> {
     fn parse(p: Parser<'a>) -> ParseResult<Self> {
+        let span = p.cur_span();
         p.parens(|p| {
             let constraint = p.parse()?;
             let mut operands = vec![];
@@ -359,6 +373,7 @@ impl<'a> Parse<'a> for Precondition<'a> {
                 operands.push(p.parse()?);
             }
             Ok(Precondition {
+                span,
                 constraint,
                 operands,
             })
@@ -442,6 +457,7 @@ impl<'a> Peek for Rhs<'a> {
 
 impl<'a> Parse<'a> for Unquote<'a> {
     fn parse(p: Parser<'a>) -> ParseResult<Self> {
+        let span = p.cur_span();
         p.parse::<tok::dollar>()?;
         p.parens(|p| {
             let operator = p.parse()?;
@@ -449,7 +465,11 @@ impl<'a> Parse<'a> for Unquote<'a> {
             while p.peek::<UnquoteOperand>() {
                 operands.push(p.parse()?);
             }
-            Ok(Unquote { operator, operands })
+            Ok(Unquote {
+                span,
+                operator,
+                operands,
+            })
         })
     }
 }
