@@ -84,10 +84,10 @@ impl VerifyError {
 /// Either `Ok(T)` or `Err(VerifyError)`.
 pub type VerifyResult<T> = Result<T, VerifyError>;
 
-/// TODO FITZGEN
+/// Verify and type check a set of optimizations.
 pub fn verify(opts: &Optimizations) -> VerifyResult<()> {
     let z3 = &z3::Context::new(&z3::Config::new());
-    for opt in opts.0.iter() {
+    for opt in opts.optimizations.iter() {
         verify_optimization(z3, opt)?;
     }
     Ok(())
@@ -393,7 +393,7 @@ fn type_constrain_pattern<'a>(
 fn type_constrain_pattern_op<'a>(
     context: &mut TypingContext<'a>,
     ty: &TypeVar<'a>,
-    op: &Operation<Pattern<'a>>,
+    op: &Operation<'a, Pattern<'a>>,
 ) -> VerifyResult<()> {
     let expected_immediates = op.operator.immediates_arity() as usize;
     let expected_params = op.operator.params_arity() as usize;
@@ -566,7 +566,7 @@ fn type_constrain_unquote<'a>(
 fn type_constrain_rhs_op<'a>(
     context: &mut TypingContext<'a>,
     ty: &TypeVar<'a>,
-    op: &Operation<Rhs<'a>>,
+    op: &Operation<'a, Rhs<'a>>,
 ) -> VerifyResult<()> {
     let expected_immediates = op.operator.immediates_arity() as usize;
     let expected_params = op.operator.params_arity() as usize;

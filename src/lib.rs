@@ -12,5 +12,6 @@ the set of optimizations into an efficient peephole optimizer.
 
 mod ast;
 mod parser;
+mod traversals;
 mod verify;
-pub use self::{ast::*, parser::*, verify::*};
+pub use self::{ast::*, parser::*, traversals::*, verify::*};

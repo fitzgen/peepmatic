@@ -46,6 +46,7 @@ The grammar for the DSL is given below:
  */
 
 use crate::ast::*;
+use std::marker::PhantomData;
 use wast::{
     parser::{Cursor, Parse, Parser, Peek, Result as ParseResult},
     Id, LParen,
@@ -75,11 +76,15 @@ mod tok {
 
 impl<'a> Parse<'a> for Optimizations<'a> {
     fn parse(p: Parser<'a>) -> ParseResult<Self> {
-        let mut opts = vec![];
+        let span = p.cur_span();
+        let mut optimizations = vec![];
         while !p.is_empty() {
-            opts.push(p.parse()?);
+            optimizations.push(p.parse()?);
         }
-        Ok(Optimizations(opts))
+        Ok(Optimizations {
+            span,
+            optimizations,
+        })
     }
 }
 
@@ -155,7 +160,7 @@ impl<'a> Peek for Pattern<'a> {
     }
 }
 
-impl<'a> Parse<'a> for ValueLiteral {
+impl<'a> Parse<'a> for ValueLiteral<'a> {
     fn parse(p: Parser<'a>) -> ParseResult<Self> {
         if let Ok(b) = p.parse::<Boolean>() {
             return Ok(ValueLiteral::Boolean(b));
@@ -167,7 +172,7 @@ impl<'a> Parse<'a> for ValueLiteral {
     }
 }
 
-impl Peek for ValueLiteral {
+impl<'a> Peek for ValueLiteral<'a> {
     fn peek(c: Cursor) -> bool {
         c.integer().is_some() || Boolean::peek(c)
     }
@@ -177,7 +182,7 @@ impl Peek for ValueLiteral {
     }
 }
 
-impl<'a> Parse<'a> for Integer {
+impl<'a> Parse<'a> for Integer<'a> {
     fn parse(p: Parser<'a>) -> ParseResult<Self> {
         let span = p.cur_span();
         p.step(|c| {
@@ -186,7 +191,14 @@ impl<'a> Parse<'a> for Integer {
                 let val = i128::from_str_radix(s, base)
                     .or_else(|_| u128::from_str_radix(s, base).map(|i| i as i128));
                 return match val {
-                    Ok(value) => Ok((Integer { span, value }, rest)),
+                    Ok(value) => Ok((
+                        Integer {
+                            span,
+                            value,
+                            marker: PhantomData,
+                        },
+                        rest,
+                    )),
                     Err(_) => Err(c.error("invalid integer: out of range")),
                 };
             }
@@ -195,20 +207,28 @@ impl<'a> Parse<'a> for Integer {
     }
 }
 
-impl<'a> Parse<'a> for Boolean {
+impl<'a> Parse<'a> for Boolean<'a> {
     fn parse(p: Parser<'a>) -> ParseResult<Self> {
         let span = p.cur_span();
         if p.parse::<tok::r#true>().is_ok() {
-            return Ok(Boolean { span, value: true });
+            return Ok(Boolean {
+                span,
+                value: true,
+                marker: PhantomData,
+            });
         }
         if p.parse::<tok::r#false>().is_ok() {
-            return Ok(Boolean { span, value: false });
+            return Ok(Boolean {
+                span,
+                value: false,
+                marker: PhantomData,
+            });
         }
         Err(p.error("expected `true` or `false`"))
     }
 }
 
-impl<'a> Peek for Boolean {
+impl<'a> Peek for Boolean<'a> {
     fn peek(c: Cursor) -> bool {
         <tok::r#true as Peek>::peek(c) || <tok::r#false as Peek>::peek(c)
     }
@@ -294,9 +314,10 @@ impl<'a> Peek for Variable<'a> {
     }
 }
 
-impl<'a, T> Parse<'a> for Operation<T>
+impl<'a, T> Parse<'a> for Operation<'a, T>
 where
-    T: Peek + Parse<'a>,
+    T: 'a + Ast<'a> + Peek + Parse<'a>,
+    DynAstRef<'a>: From<&'a T>,
 {
     fn parse(p: Parser<'a>) -> ParseResult<Self> {
         let span = p.cur_span();
@@ -310,12 +331,17 @@ where
                 span,
                 operator,
                 operands,
+                marker: PhantomData,
             })
         })
     }
 }
 
-impl<T> Peek for Operation<T> {
+impl<'a, T> Peek for Operation<'a, T>
+where
+    T: 'a + Ast<'a>,
+    DynAstRef<'a>: From<&'a T>,
+{
     fn peek(c: Cursor) -> bool {
         wast::LParen::peek(c)
     }
