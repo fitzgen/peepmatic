@@ -13,6 +13,7 @@
 //! implemented yet.
 
 use crate::ast::{Span as _, *};
+use crate::traversals::Dfs;
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::fmt;
@@ -340,15 +341,7 @@ pub(crate) struct TypeVar<'a> {
 
 fn verify_optimization(z3: &z3::Context, opt: &Optimization) -> VerifyResult<()> {
     let mut context = TypingContext::new(z3);
-    let lhs_ty = type_constrain_lhs(&mut context, &opt.lhs)?;
-    let rhs_ty = context.new_type_var();
-    type_constrain_rhs(&mut context, &rhs_ty, &opt.rhs)?;
-    context.assert_type_eq(
-        opt.span,
-        &lhs_ty,
-        &rhs_ty,
-        Some("type error: the left-hand side and right-hand side must have the same type".into()),
-    );
+    collect_type_constraints(&mut context, &opt)?;
     context.type_check(opt.span)?;
 
     // TODO: add another pass here to check for counter-examples to this
@@ -357,89 +350,173 @@ fn verify_optimization(z3: &z3::Context, opt: &Optimization) -> VerifyResult<()>
     Ok(())
 }
 
-fn type_constrain_lhs<'a>(
+fn collect_type_constraints<'a>(
     context: &mut TypingContext<'a>,
-    lhs: &Lhs<'a>,
-) -> VerifyResult<TypeVar<'a>> {
-    let ty = context.new_type_var();
-    type_constrain_pattern(context, &ty, &lhs.pattern)?;
-    type_constrain_preconditions(context, &lhs.preconditions)?;
-    Ok(ty)
-}
-
-fn type_constrain_pattern<'a>(
-    context: &mut TypingContext<'a>,
-    ty: &TypeVar<'a>,
-    pattern: &Pattern<'a>,
+    opt: &'a Optimization<'a>,
 ) -> VerifyResult<()> {
-    match pattern {
-        Pattern::Constant(Constant { id, span }) | Pattern::Variable(Variable { id, span }) => {
-            let id = context.get_or_create_type_var_for_id(*id);
-            context.assert_type_eq(*span, ty, &id, None);
-            Ok(())
+    use crate::traversals::TraversalEvent as TE;
+
+    let lhs_ty = context.new_type_var();
+    let rhs_ty = context.new_type_var();
+    context.assert_type_eq(
+        opt.span,
+        &lhs_ty,
+        &rhs_ty,
+        Some("type error: the left-hand side and right-hand side must have the same type".into()),
+    );
+
+    // A stack of type variables that we are constraining as we traverse the
+    // AST. Operations push new type variables for their operands' expected
+    // types, and exiting a `Pattern` in the traversal pops them off.
+    let mut expected_types = vec![lhs_ty];
+
+    // Build up the type constraints for the left-hand side.
+    for (event, node) in Dfs::new(&opt.lhs) {
+        match (event, node) {
+            (TE::Enter, DynAstRef::Pattern(Pattern::Constant(Constant { id, span })))
+            | (TE::Enter, DynAstRef::Pattern(Pattern::Variable(Variable { id, span }))) => {
+                let id = context.get_or_create_type_var_for_id(*id);
+                context.assert_type_eq(*span, expected_types.last().unwrap(), &id, None);
+            }
+            (
+                TE::Enter,
+                DynAstRef::Pattern(Pattern::ValueLiteral(ValueLiteral::Integer(Integer {
+                    span,
+                    ..
+                }))),
+            ) => {
+                context.assert_is_integer(*span, expected_types.last().unwrap());
+            }
+            (
+                TE::Enter,
+                DynAstRef::Pattern(Pattern::ValueLiteral(ValueLiteral::Boolean(Boolean {
+                    span,
+                    ..
+                }))),
+            ) => {
+                context.assert_is_bool(*span, expected_types.last().unwrap());
+            }
+            (TE::Enter, DynAstRef::PatternOperation(op)) => {
+                let result_ty;
+                let mut operand_types = vec![];
+                {
+                    let mut scope = context.enter_operation_scope();
+                    result_ty = op.operator.result_type(&mut scope, op.span);
+                    op.operator
+                        .immediate_types(&mut scope, op.span, &mut operand_types);
+                    op.operator
+                        .param_types(&mut scope, op.span, &mut operand_types);
+                }
+
+                if op.operands.len() != operand_types.len() {
+                    return Err(WastError::new(
+                        op.span,
+                        format!(
+                            "Expected {} operands but found {}",
+                            operand_types.len(),
+                            op.operands.len()
+                        ),
+                    )
+                    .into());
+                }
+
+                context.assert_type_eq(op.span, expected_types.last().unwrap(), &result_ty, None);
+
+                operand_types.reverse();
+                expected_types.extend(operand_types);
+            }
+            (TE::Exit, DynAstRef::Pattern(..)) => {
+                expected_types.pop().unwrap();
+            }
+            (TE::Enter, DynAstRef::Precondition(pre)) => {
+                type_constrain_precondition(context, pre)?;
+            }
+            _ => continue,
         }
-        Pattern::ValueLiteral(ValueLiteral::Integer(Integer { span, .. })) => {
-            context.assert_is_integer(*span, &ty);
-            Ok(())
+    }
+
+    // We should have exited exactly as many patterns as we entered: one for the
+    // root pattern and the initial `lhs_ty`, and then the rest for the operands
+    // of pattern operations.
+    assert!(expected_types.is_empty());
+
+    // Collect the type constraints for the right-hand side.
+    expected_types.push(rhs_ty);
+    for (event, node) in Dfs::new(&opt.rhs) {
+        match (event, node) {
+            (
+                TE::Enter,
+                DynAstRef::Rhs(Rhs::ValueLiteral(ValueLiteral::Integer(Integer { span, .. }))),
+            ) => {
+                context.assert_is_integer(*span, expected_types.last().unwrap());
+            }
+            (
+                TE::Enter,
+                DynAstRef::Rhs(Rhs::ValueLiteral(ValueLiteral::Boolean(Boolean { span, .. }))),
+            ) => {
+                context.assert_is_bool(*span, expected_types.last().unwrap());
+            }
+            (TE::Enter, DynAstRef::Rhs(Rhs::Constant(Constant { span, id })))
+            | (TE::Enter, DynAstRef::Rhs(Rhs::Variable(Variable { span, id }))) => {
+                let id_ty = context.get_type_var_for_id(*id)?;
+                context.assert_type_eq(*span, expected_types.last().unwrap(), &id_ty, None);
+            }
+            (TE::Enter, DynAstRef::RhsOperation(op)) => {
+                let result_ty;
+                let mut operand_types = vec![];
+                {
+                    let mut scope = context.enter_operation_scope();
+                    result_ty = op.operator.result_type(&mut scope, op.span);
+                    op.operator
+                        .immediate_types(&mut scope, op.span, &mut operand_types);
+                    op.operator
+                        .param_types(&mut scope, op.span, &mut operand_types);
+                }
+
+                if op.operands.len() != operand_types.len() {
+                    return Err(WastError::new(
+                        op.span,
+                        format!(
+                            "Expected {} operands but found {}",
+                            operand_types.len(),
+                            op.operands.len()
+                        ),
+                    )
+                    .into());
+                }
+
+                context.assert_type_eq(op.span, expected_types.last().unwrap(), &result_ty, None);
+
+                operand_types.reverse();
+                expected_types.extend(operand_types);
+            }
+            (TE::Enter, DynAstRef::Unquote(unq)) => match unq.operator {
+                UnquoteOperator::Log2 => {
+                    if unq.operands.len() != 1 {
+                        return Err(WastError::new(
+                                unq.span,
+                                format!(
+                                    "the `log2` unquote operatore requires exactly 1 operand, found {} \
+                                     operands",
+                                    unq.operands.len()
+                                ),
+                            )
+                                   .into());
+                    }
+                    context.assert_is_integer(unq.span, expected_types.last().unwrap());
+                }
+            },
+            (TE::Exit, DynAstRef::Rhs(..)) => {
+                expected_types.pop().unwrap();
+            }
+            _ => continue,
         }
-        Pattern::ValueLiteral(ValueLiteral::Boolean(Boolean { span, .. })) => {
-            context.assert_is_bool(*span, &ty);
-            Ok(())
-        }
-        Pattern::Operation(op) => type_constrain_pattern_op(context, ty, op),
-    }
-}
-
-fn type_constrain_pattern_op<'a>(
-    context: &mut TypingContext<'a>,
-    ty: &TypeVar<'a>,
-    op: &Operation<'a, Pattern<'a>>,
-) -> VerifyResult<()> {
-    let expected_immediates = op.operator.immediates_arity() as usize;
-    let expected_params = op.operator.params_arity() as usize;
-    let expected_total = expected_immediates + expected_params;
-    if op.operands.len() != expected_total {
-        return Err(WastError::new(
-            op.span,
-            format!(
-                "Expected {} operands ({} immediates and {} parameters) but found {}",
-                expected_total,
-                expected_immediates,
-                expected_params,
-                op.operands.len()
-            ),
-        )
-        .into());
     }
 
-    let result_ty;
-    let mut expected_types = vec![];
-    {
-        let mut scope = context.enter_operation_scope();
-        result_ty = op.operator.result_type(&mut scope, op.span);
-        op.operator
-            .immediate_types(&mut scope, op.span, &mut expected_types);
-        op.operator
-            .param_types(&mut scope, op.span, &mut expected_types);
-    }
+    // Again, we should have popped off all the expected types when exiting
+    // `Rhs` nodes in the traversal.
+    assert!(expected_types.is_empty());
 
-    context.assert_type_eq(op.span, &ty, &result_ty, None);
-
-    debug_assert_eq!(expected_types.len(), op.operands.len());
-    for (expected_ty, operand) in expected_types.iter().zip(&op.operands) {
-        type_constrain_pattern(context, expected_ty, operand)?;
-    }
-
-    Ok(())
-}
-
-fn type_constrain_preconditions<'a>(
-    context: &mut TypingContext<'a>,
-    preconditions: &[Precondition<'a>],
-) -> VerifyResult<()> {
-    for p in preconditions {
-        type_constrain_precondition(context, p)?;
-    }
     Ok(())
 }
 
@@ -513,97 +590,6 @@ fn type_constrain_precondition<'a>(
             Ok(())
         }
     }
-}
-
-fn type_constrain_rhs<'a>(
-    context: &mut TypingContext<'a>,
-    ty: &TypeVar<'a>,
-    rhs: &Rhs<'a>,
-) -> VerifyResult<()> {
-    match rhs {
-        Rhs::ValueLiteral(ValueLiteral::Integer(Integer { span, .. })) => {
-            context.assert_is_integer(*span, ty);
-            Ok(())
-        }
-        Rhs::ValueLiteral(ValueLiteral::Boolean(Boolean { span, .. })) => {
-            context.assert_is_bool(*span, ty);
-            Ok(())
-        }
-        Rhs::Constant(Constant { span, id }) | Rhs::Variable(Variable { span, id }) => {
-            let id_ty = context.get_type_var_for_id(*id)?;
-            context.assert_type_eq(*span, ty, &id_ty, None);
-            Ok(())
-        }
-        Rhs::Unquote(u) => type_constrain_unquote(context, ty, u),
-        Rhs::Operation(op) => type_constrain_rhs_op(context, ty, op),
-    }
-}
-
-fn type_constrain_unquote<'a>(
-    context: &mut TypingContext<'a>,
-    ty: &TypeVar<'a>,
-    unq: &Unquote<'a>,
-) -> VerifyResult<()> {
-    match unq.operator {
-        UnquoteOperator::Log2 => {
-            if unq.operands.len() != 1 {
-                return Err(WastError::new(
-                    unq.span,
-                    format!(
-                        "the `log2` unquote operatore requires exactly 1 operand, found {} \
-                         operands",
-                        unq.operands.len()
-                    ),
-                )
-                .into());
-            }
-            context.assert_is_integer(unq.span, ty);
-            Ok(())
-        }
-    }
-}
-
-fn type_constrain_rhs_op<'a>(
-    context: &mut TypingContext<'a>,
-    ty: &TypeVar<'a>,
-    op: &Operation<'a, Rhs<'a>>,
-) -> VerifyResult<()> {
-    let expected_immediates = op.operator.immediates_arity() as usize;
-    let expected_params = op.operator.params_arity() as usize;
-    let expected_total = expected_immediates + expected_params;
-    if op.operands.len() != expected_total {
-        return Err(WastError::new(
-            op.span,
-            format!(
-                "Expected {} operands ({} immediates and {} parameters) but found {}",
-                expected_total,
-                expected_immediates,
-                expected_params,
-                op.operands.len()
-            ),
-        )
-        .into());
-    }
-
-    let result_ty;
-    let mut expected_types = vec![];
-    {
-        let mut scope = context.enter_operation_scope();
-        result_ty = op.operator.result_type(&mut scope, op.span);
-        op.operator
-            .immediate_types(&mut scope, op.span, &mut expected_types);
-        op.operator
-            .param_types(&mut scope, op.span, &mut expected_types);
-    }
-
-    context.assert_type_eq(op.span, &ty, &result_ty, None);
-
-    debug_assert_eq!(expected_types.len(), op.operands.len());
-    for (expected_ty, operand) in expected_types.iter().zip(&op.operands) {
-        type_constrain_rhs(context, expected_ty, operand)?;
-    }
-
-    Ok(())
 }
 
 #[cfg(test)]
