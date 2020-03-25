@@ -98,7 +98,6 @@ impl<'a> Iterator for Dfs<'a> {
 mod tests {
     use super::*;
     use DynAstRef::*;
-    use TraversalEvent::*;
 
     #[test]
     fn test_dfs_traversal() {
@@ -114,61 +113,166 @@ mod tests {
         };
 
         let mut dfs = Dfs::new(&ast);
-        assert!(matches!(dbg!(dfs.next()), Some((Enter, Optimizations(..)))));
-        assert!(matches!(dbg!(dfs.next()), Some((Enter, Optimization(..)))));
-        assert!(matches!(dbg!(dfs.next()), Some((Enter, Lhs(..)))));
-        assert!(matches!(dbg!(dfs.next()), Some((Enter, Pattern(..)))));
         assert!(matches!(
             dbg!(dfs.next()),
-            Some((Enter, PatternOperation(..)))
+            Some((TraversalEvent::Enter, Optimizations(..)))
         ));
-        assert!(matches!(dbg!(dfs.next()), Some((Enter, Pattern(..)))));
-        assert!(matches!(dbg!(dfs.next()), Some((Enter, Variable(..)))));
-        assert!(matches!(dbg!(dfs.next()), Some((Exit, Variable(..)))));
-        assert!(matches!(dbg!(dfs.next()), Some((Exit, Pattern(..)))));
-        assert!(matches!(dbg!(dfs.next()), Some((Enter, Pattern(..)))));
-        assert!(matches!(dbg!(dfs.next()), Some((Enter, Constant(..)))));
-        assert!(matches!(dbg!(dfs.next()), Some((Exit, Constant(..)))));
-        assert!(matches!(dbg!(dfs.next()), Some((Exit, Pattern(..)))));
         assert!(matches!(
             dbg!(dfs.next()),
-            Some((Exit, PatternOperation(..)))
+            Some((TraversalEvent::Enter, Optimization(..)))
         ));
-        assert!(matches!(dbg!(dfs.next()), Some((Exit, Pattern(..)))));
-        assert!(matches!(dbg!(dfs.next()), Some((Enter, Precondition(..)))));
         assert!(matches!(
             dbg!(dfs.next()),
-            Some((Enter, ConstraintOperand(..)))
+            Some((TraversalEvent::Enter, Lhs(..)))
         ));
-        assert!(matches!(dbg!(dfs.next()), Some((Enter, Constant(..)))));
-        assert!(matches!(dbg!(dfs.next()), Some((Exit, Constant(..)))));
         assert!(matches!(
             dbg!(dfs.next()),
-            Some((Exit, ConstraintOperand(..)))
+            Some((TraversalEvent::Enter, Pattern(..)))
         ));
-        assert!(matches!(dbg!(dfs.next()), Some((Exit, Precondition(..)))));
-        assert!(matches!(dbg!(dfs.next()), Some((Exit, Lhs(..)))));
-        assert!(matches!(dbg!(dfs.next()), Some((Enter, Rhs(..)))));
-        assert!(matches!(dbg!(dfs.next()), Some((Enter, RhsOperation(..)))));
-        assert!(matches!(dbg!(dfs.next()), Some((Enter, Rhs(..)))));
-        assert!(matches!(dbg!(dfs.next()), Some((Enter, Variable(..)))));
-        assert!(matches!(dbg!(dfs.next()), Some((Exit, Variable(..)))));
-        assert!(matches!(dbg!(dfs.next()), Some((Exit, Rhs(..)))));
-        assert!(matches!(dbg!(dfs.next()), Some((Enter, Rhs(..)))));
-        assert!(matches!(dbg!(dfs.next()), Some((Enter, Unquote(..)))));
         assert!(matches!(
             dbg!(dfs.next()),
-            Some((Enter, UnquoteOperand(..)))
+            Some((TraversalEvent::Enter, PatternOperation(..)))
         ));
-        assert!(matches!(dbg!(dfs.next()), Some((Enter, Constant(..)))));
-        assert!(matches!(dbg!(dfs.next()), Some((Exit, Constant(..)))));
-        assert!(matches!(dbg!(dfs.next()), Some((Exit, UnquoteOperand(..)))));
-        assert!(matches!(dbg!(dfs.next()), Some((Exit, Unquote(..)))));
-        assert!(matches!(dbg!(dfs.next()), Some((Exit, Rhs(..)))));
-        assert!(matches!(dbg!(dfs.next()), Some((Exit, RhsOperation(..)))));
-        assert!(matches!(dbg!(dfs.next()), Some((Exit, Rhs(..)))));
-        assert!(matches!(dbg!(dfs.next()), Some((Exit, Optimization(..)))));
-        assert!(matches!(dbg!(dfs.next()), Some((Exit, Optimizations(..)))));
+        assert!(matches!(
+            dbg!(dfs.next()),
+            Some((TraversalEvent::Enter, Pattern(..)))
+        ));
+        assert!(matches!(
+            dbg!(dfs.next()),
+            Some((TraversalEvent::Enter, Variable(..)))
+        ));
+        assert!(matches!(
+            dbg!(dfs.next()),
+            Some((TraversalEvent::Exit, Variable(..)))
+        ));
+        assert!(matches!(
+            dbg!(dfs.next()),
+            Some((TraversalEvent::Exit, Pattern(..)))
+        ));
+        assert!(matches!(
+            dbg!(dfs.next()),
+            Some((TraversalEvent::Enter, Pattern(..)))
+        ));
+        assert!(matches!(
+            dbg!(dfs.next()),
+            Some((TraversalEvent::Enter, Constant(..)))
+        ));
+        assert!(matches!(
+            dbg!(dfs.next()),
+            Some((TraversalEvent::Exit, Constant(..)))
+        ));
+        assert!(matches!(
+            dbg!(dfs.next()),
+            Some((TraversalEvent::Exit, Pattern(..)))
+        ));
+        assert!(matches!(
+            dbg!(dfs.next()),
+            Some((TraversalEvent::Exit, PatternOperation(..)))
+        ));
+        assert!(matches!(
+            dbg!(dfs.next()),
+            Some((TraversalEvent::Exit, Pattern(..)))
+        ));
+        assert!(matches!(
+            dbg!(dfs.next()),
+            Some((TraversalEvent::Enter, Precondition(..)))
+        ));
+        assert!(matches!(
+            dbg!(dfs.next()),
+            Some((TraversalEvent::Enter, ConstraintOperand(..)))
+        ));
+        assert!(matches!(
+            dbg!(dfs.next()),
+            Some((TraversalEvent::Enter, Constant(..)))
+        ));
+        assert!(matches!(
+            dbg!(dfs.next()),
+            Some((TraversalEvent::Exit, Constant(..)))
+        ));
+        assert!(matches!(
+            dbg!(dfs.next()),
+            Some((TraversalEvent::Exit, ConstraintOperand(..)))
+        ));
+        assert!(matches!(
+            dbg!(dfs.next()),
+            Some((TraversalEvent::Exit, Precondition(..)))
+        ));
+        assert!(matches!(
+            dbg!(dfs.next()),
+            Some((TraversalEvent::Exit, Lhs(..)))
+        ));
+        assert!(matches!(
+            dbg!(dfs.next()),
+            Some((TraversalEvent::Enter, Rhs(..)))
+        ));
+        assert!(matches!(
+            dbg!(dfs.next()),
+            Some((TraversalEvent::Enter, RhsOperation(..)))
+        ));
+        assert!(matches!(
+            dbg!(dfs.next()),
+            Some((TraversalEvent::Enter, Rhs(..)))
+        ));
+        assert!(matches!(
+            dbg!(dfs.next()),
+            Some((TraversalEvent::Enter, Variable(..)))
+        ));
+        assert!(matches!(
+            dbg!(dfs.next()),
+            Some((TraversalEvent::Exit, Variable(..)))
+        ));
+        assert!(matches!(
+            dbg!(dfs.next()),
+            Some((TraversalEvent::Exit, Rhs(..)))
+        ));
+        assert!(matches!(
+            dbg!(dfs.next()),
+            Some((TraversalEvent::Enter, Rhs(..)))
+        ));
+        assert!(matches!(
+            dbg!(dfs.next()),
+            Some((TraversalEvent::Enter, Unquote(..)))
+        ));
+        assert!(matches!(
+            dbg!(dfs.next()),
+            Some((TraversalEvent::Enter, UnquoteOperand(..)))
+        ));
+        assert!(matches!(
+            dbg!(dfs.next()),
+            Some((TraversalEvent::Enter, Constant(..)))
+        ));
+        assert!(matches!(
+            dbg!(dfs.next()),
+            Some((TraversalEvent::Exit, Constant(..)))
+        ));
+        assert!(matches!(
+            dbg!(dfs.next()),
+            Some((TraversalEvent::Exit, UnquoteOperand(..)))
+        ));
+        assert!(matches!(
+            dbg!(dfs.next()),
+            Some((TraversalEvent::Exit, Unquote(..)))
+        ));
+        assert!(matches!(
+            dbg!(dfs.next()),
+            Some((TraversalEvent::Exit, Rhs(..)))
+        ));
+        assert!(matches!(
+            dbg!(dfs.next()),
+            Some((TraversalEvent::Exit, RhsOperation(..)))
+        ));
+        assert!(matches!(
+            dbg!(dfs.next()),
+            Some((TraversalEvent::Exit, Rhs(..)))
+        ));
+        assert!(matches!(
+            dbg!(dfs.next()),
+            Some((TraversalEvent::Exit, Optimization(..)))
+        ));
+        assert!(matches!(
+            dbg!(dfs.next()),
+            Some((TraversalEvent::Exit, Optimizations(..)))
+        ));
         assert!(dfs.next().is_none());
     }
 }
