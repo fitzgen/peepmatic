@@ -235,7 +235,7 @@ mod tests {
         ));
         assert!(matches!(
             dbg!(dfs.next()),
-            Some((TraversalEvent::Enter, UnquoteOperand(..)))
+            Some((TraversalEvent::Enter, Rhs(..)))
         ));
         assert!(matches!(
             dbg!(dfs.next()),
@@ -247,7 +247,7 @@ mod tests {
         ));
         assert!(matches!(
             dbg!(dfs.next()),
-            Some((TraversalEvent::Exit, UnquoteOperand(..)))
+            Some((TraversalEvent::Exit, Rhs(..)))
         ));
         assert!(matches!(
             dbg!(dfs.next()),

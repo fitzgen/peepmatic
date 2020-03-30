@@ -122,7 +122,7 @@ a single `iadd_imm` instruction:
 Patterns can also match nested operations with their own nesting:
 
 ```lisp
-(=> (bor $x (bor $x y))
+(=> (bor $x (bor $x $y))
     (bor $x $y))
 ```
 

@@ -69,9 +69,6 @@ pub enum DynAstRef<'a> {
     /// A reference to an `Unquote`.
     Unquote(&'a Unquote<'a>),
 
-    /// A reference to an `UnquoteOperand`.
-    UnquoteOperand(&'a UnquoteOperand<'a>),
-
     /// A reference to an `RhsOperation`.
     RhsOperation(&'a Operation<'a, Rhs<'a>>),
 }
@@ -93,7 +90,6 @@ impl<'a, 'b> ChildNodes<'a, 'b> for DynAstRef<'a> {
             Self::Integer(x) => x.child_nodes(sink),
             Self::Boolean(x) => x.child_nodes(sink),
             Self::Unquote(x) => x.child_nodes(sink),
-            Self::UnquoteOperand(x) => x.child_nodes(sink),
             Self::RhsOperation(x) => x.child_nodes(sink),
         }
     }
@@ -452,7 +448,7 @@ pub struct Unquote<'a> {
 
     /// The operands for this unquote operation.
     #[peepmatic(flatten)]
-    pub operands: Vec<UnquoteOperand<'a>>,
+    pub operands: Vec<Rhs<'a>>,
 }
 
 /// Valid operators for compile-time unquote operations.
@@ -462,13 +458,13 @@ pub enum UnquoteOperator {
     Log2,
 }
 
-/// An operand for an unquote operation.
-#[derive(Debug, Ast)]
-pub enum UnquoteOperand<'a> {
-    /// A value-literal operand.
-    ValueLiteral(ValueLiteral<'a>),
+// /// An operand for an unquote operation.
+// #[derive(Debug, Ast)]
+// pub enum UnquoteOperand<'a> {
+//     /// A value-literal operand.
+//     ValueLiteral(ValueLiteral<'a>),
 
-    /// A constant operand. The constant must have been defined and matched in
-    /// the left-hand side pattern.
-    Constant(Constant<'a>),
-}
+//     /// A constant operand. The constant must have been defined and matched in
+//     /// the left-hand side pattern.
+//     Constant(Constant<'a>),
+// }

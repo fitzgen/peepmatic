@@ -17,6 +17,7 @@ use crate::traversals::Dfs;
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::fmt;
+use std::iter;
 use std::ops::{Deref, DerefMut};
 use std::path::Path;
 use wast::{Error as WastError, Id, Span};
@@ -275,10 +276,9 @@ impl<'a> TypingContext<'a> {
     fn type_check(&self, span: Span) -> VerifyResult<()> {
         let solver = z3::Solver::new(self.z3);
 
-        let trackers =
-            std::iter::repeat_with(|| z3::ast::Bool::fresh_const(self.z3, "type-constraint"))
-                .take(self.constraints.len())
-                .collect::<Vec<_>>();
+        let trackers = iter::repeat_with(|| z3::ast::Bool::fresh_const(self.z3, "type-constraint"))
+            .take(self.constraints.len())
+            .collect::<Vec<_>>();
 
         let mut tracker_to_diagnostics = HashMap::with_capacity(self.constraints.len());
 
@@ -490,10 +490,27 @@ fn collect_type_constraints<'a>(
                 operand_types.reverse();
                 expected_types.extend(operand_types);
             }
-            (TE::Enter, DynAstRef::Unquote(unq)) => match unq.operator {
-                UnquoteOperator::Log2 => {
-                    if unq.operands.len() != 1 {
-                        return Err(WastError::new(
+            (TE::Enter, DynAstRef::Unquote(unq)) => {
+                for op in &unq.operands {
+                    match op {
+                        Rhs::ValueLiteral(_) | Rhs::Constant(_) => continue,
+                        _ => {
+                            return Err(WastError::new(
+                                op.span(),
+                                "unquoted $(...) operands must be value literals or constants"
+                                    .into(),
+                            )
+                            .into());
+                        }
+                    }
+                }
+                expected_types
+                    .extend(iter::repeat(context.new_type_var()).take(unq.operands.len()));
+
+                match unq.operator {
+                    UnquoteOperator::Log2 => {
+                        if unq.operands.len() != 1 {
+                            return Err(WastError::new(
                                 unq.span,
                                 format!(
                                     "the `log2` unquote operatore requires exactly 1 operand, found {} \
@@ -502,10 +519,24 @@ fn collect_type_constraints<'a>(
                                 ),
                             )
                                    .into());
+                        }
+
+                        // The operand is an integer.
+                        context.assert_is_integer(
+                            unq.operands[0].span(),
+                            expected_types.last().unwrap(),
+                        );
+
+                        // And the result is the same type.
+                        context.assert_type_eq(
+                            unq.span,
+                            &expected_types[expected_types.len() - 2],
+                            &expected_types[expected_types.len() - 1],
+                            None,
+                        );
                     }
-                    context.assert_is_integer(unq.span, expected_types.last().unwrap());
                 }
-            },
+            }
             (TE::Exit, DynAstRef::Rhs(..)) => {
                 expected_types.pop().unwrap();
             }
@@ -587,7 +618,18 @@ fn type_constrain_precondition<'a>(
                 )
                 .into());
             }
-            Ok(())
+            match &pre.operands[0] {
+                ConstraintOperand::Constant(Constant { id, .. }) => {
+                    let ty = context.get_type_var_for_id(*id)?;
+                    context.assert_is_integer(pre.span(), &ty);
+                    Ok(())
+                }
+                op => Err(WastError::new(
+                    op.span(),
+                    "`is-power-of-two` operands must be constant bindings".into(),
+                )
+                .into()),
+            }
         }
     }
 }
@@ -738,14 +780,6 @@ mod tests {
         "
 (=> (when (imul $x $C)
           (is-power-of-two $C $C))
-    5)
-"
-    );
-    verify_ok!(
-        is_power_of_two_3,
-        "
-(=> (when (imul $x $C)
-          (is-power-of-two 4))
     5)
 "
     );

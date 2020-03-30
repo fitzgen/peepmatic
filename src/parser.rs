@@ -488,7 +488,7 @@ impl<'a> Parse<'a> for Unquote<'a> {
         p.parens(|p| {
             let operator = p.parse()?;
             let mut operands = vec![];
-            while p.peek::<UnquoteOperand>() {
+            while p.peek::<Rhs>() {
                 operands.push(p.parse()?);
             }
             Ok(Unquote {
@@ -517,28 +517,6 @@ impl<'a> Parse<'a> for UnquoteOperator {
             return Ok(UnquoteOperator::Log2);
         }
         Err(p.error("expected an operator for an unquote expression"))
-    }
-}
-
-impl<'a> Parse<'a> for UnquoteOperand<'a> {
-    fn parse(p: Parser<'a>) -> ParseResult<Self> {
-        if p.peek::<ValueLiteral>() {
-            return Ok(UnquoteOperand::ValueLiteral(p.parse()?));
-        }
-        if p.peek::<Constant>() {
-            return Ok(UnquoteOperand::Constant(p.parse()?));
-        }
-        Err(p.error("expected an operand for an unquote expression"))
-    }
-}
-
-impl<'a> Peek for UnquoteOperand<'a> {
-    fn peek(c: Cursor) -> bool {
-        ValueLiteral::peek(c) || Constant::peek(c)
-    }
-
-    fn display() -> &'static str {
-        "operand for unquote expression"
     }
 }
 
@@ -839,17 +817,6 @@ mod test {
                 "",
                 "(log2 $C)",
                 "$()",
-            }
-        }
-        parse_unquote_operand<UnquoteOperand> {
-            ok {
-                "5",
-                "$C",
-            }
-            err {
-                "",
-                "$x",
-                "(iadd 1 2)",
             }
         }
         parse_value_literal<ValueLiteral> {
