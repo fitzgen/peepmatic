@@ -10,16 +10,12 @@ edition = "2018"
 anyhow = "1.0.27"
 peepmatic-macro = { version = "0.1.0", path = "crates/macro" }
 peepmatic-runtime = { version = "0.1.0", path = "crates/runtime" }
+wast = "12.0.0"
 
 # Waiting on https://github.com/prove-rs/z3.rs/pull/71 to merge.
 [dependencies.z3]
 git = "https://github.com/fitzgen/z3.rs.git"
 branch = "add-get-unsat-core-and-other-small-fixups"
 features = ["static-link-z3"]
-
-# Waiting on https://github.com/bytecodealliance/wat/pull/71 to merge.
-[dependencies.wast]
-git = "https://github.com/fitzgen/wat.git"
-branch = "more-traits-for-span"
 
 [workspace]
