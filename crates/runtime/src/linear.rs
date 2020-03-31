@@ -47,7 +47,7 @@ pub struct Increment {
 
 /// A matching operation to be performed on some Cranelift instruction as part
 /// of determining whether an optimization is applicable.
-#[derive(Debug, PartialEq, Eq, Deserialize, Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize)]
 pub enum MatchOp {
     /// Switch on the opcode of an instruction.
     Opcode {
