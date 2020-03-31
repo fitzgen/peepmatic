@@ -19,7 +19,7 @@ pub struct Optimizations {
 }
 
 /// A linearized optimization.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Optimization {
     /// The chain of increments for this optimization.
     pub increments: Vec<Increment>,
@@ -31,14 +31,15 @@ pub struct Optimization {
 /// result from this increment's matching operation. Each increment will
 /// basically become a state and a transition edge out of that state in the
 /// final automata.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Increment {
     /// The matching operation to perform.
     pub operation: MatchOp,
 
     /// The expected result of our matching operation, that enables us to
-    /// continue to the next increment.
-    pub expected: u32,
+    /// continue to the next increment. `None` is used for wildcard-style "else"
+    /// transitions.
+    pub expected: Option<u32>,
 
     /// Actions to perform, given that the operation resulted in the expected
     /// value.
@@ -95,7 +96,7 @@ pub enum MatchOp {
         path: PathId,
     },
 
-    /// No operation. Always evaluates to 0.
+    /// No operation. Always evaluates to `None`.
     ///
     /// Exceedingly rare in real optimizations; nonetheless required to support
     /// corner cases of the DSL, such as a LHS pattern that is nothing but a
@@ -113,7 +114,7 @@ pub struct LhsId(pub u32);
 pub struct RhsId(pub u32);
 
 /// An action to perform when transitioning between states in the automata.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Action {
     /// Bind `id = path` in the left-hand side scope.
     AddToLhsScope {

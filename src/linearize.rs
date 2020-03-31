@@ -140,7 +140,7 @@ fn linearize_optimization(paths: &mut PathInterner, opt: &Optimization) -> linea
         let (operation, expected) = pattern.to_linear_match_op(&lhs_canonicalizer, path);
         let mut inc = linear::Increment {
             operation,
-            expected,
+            expected: Some(expected),
             actions: vec![],
         };
 
@@ -575,7 +575,7 @@ impl Precondition<'_> {
                 let id = lhs_canonicalizer.get(&id);
                 linear::Increment {
                     operation: linear::MatchOp::IsPowerOfTwo { id },
-                    expected: 1,
+                    expected: Some(1),
                     actions: vec![],
                 }
             }
@@ -599,7 +599,7 @@ impl Precondition<'_> {
 
                 linear::Increment {
                     operation: linear::MatchOp::BitWidth { id },
-                    expected: width as u32,
+                    expected: Some(width as u32),
                     actions: vec![],
                 }
             }
@@ -726,7 +726,7 @@ mod tests {
                     operation: linear::MatchOp::Opcode {
                         path: paths.intern(Path::new(&[0]))
                     },
-                    expected: 5,
+                    expected: Some(5),
                     actions: vec![
                         linear::Action::AddToLhsScope {
                             id: linear::LhsId(0),
@@ -751,14 +751,14 @@ mod tests {
                     operation: linear::MatchOp::IsConst {
                         path: paths.intern(Path::new(&[0, 1])),
                     },
-                    expected: 1,
+                    expected: Some(1),
                     actions: vec![]
                 },
                 linear::Increment {
                     operation: linear::MatchOp::IsPowerOfTwo {
                         id: linear::LhsId(1)
                     },
-                    expected: 1,
+                    expected: Some(1),
                     actions: vec![]
                 }
             ]
@@ -771,7 +771,7 @@ mod tests {
         |paths: &mut PathInterner| linear::Optimization {
             increments: vec![linear::Increment {
                 operation: linear::MatchOp::Nop,
-                expected: 0,
+                expected: Some(0),
                 actions: vec![
                     linear::Action::AddToLhsScope {
                         id: linear::LhsId(0),
@@ -793,7 +793,7 @@ mod tests {
                 operation: linear::MatchOp::IsConst {
                     path: paths.intern(Path::new(&[0]))
                 },
-                expected: 1,
+                expected: Some(1),
                 actions: vec![
                     linear::Action::AddToLhsScope {
                         id: linear::LhsId(0),
@@ -815,7 +815,7 @@ mod tests {
                 operation: linear::MatchOp::BooleanValue {
                     path: paths.intern(Path::new(&[0])),
                 },
-                expected: 1,
+                expected: Some(1),
                 actions: vec![linear::Action::MakeBooleanConst { value: true }],
             }]
         },
@@ -829,7 +829,7 @@ mod tests {
                 operation: linear::MatchOp::IntegerValue {
                     path: paths.intern(Path::new(&[0])),
                 },
-                expected: 5,
+                expected: Some(5),
                 actions: vec![linear::Action::MakeIntegerConst { value: 5 }],
             }]
         },
@@ -844,7 +844,7 @@ mod tests {
                     operation: linear::MatchOp::Opcode {
                         path: paths.intern(Path::new(&[0])),
                     },
-                    expected: 4,
+                    expected: Some(4),
                     actions: vec![
                         linear::Action::AddToLhsScope {
                             id: linear::LhsId(0),
@@ -862,7 +862,7 @@ mod tests {
                     operation: linear::MatchOp::IsConst {
                         path: paths.intern(Path::new(&[0, 0])),
                     },
-                    expected: 1,
+                    expected: Some(1),
                     actions: vec![],
                 }
             ]
@@ -878,7 +878,7 @@ mod tests {
                     operation: linear::MatchOp::Opcode {
                         path: paths.intern(Path::new(&[0]))
                     },
-                    expected: 1,
+                    expected: Some(1),
                     actions: vec![
                         linear::Action::AddToLhsScope {
                             id: linear::LhsId(0),
@@ -893,7 +893,7 @@ mod tests {
                     operation: linear::MatchOp::Opcode {
                         path: paths.intern(Path::new(&[0, 1]))
                     },
-                    expected: 1,
+                    expected: Some(1),
                     actions: vec![
                         linear::Action::AddToLhsScope {
                             id: linear::LhsId(1),
@@ -912,7 +912,7 @@ mod tests {
                         id: linear::LhsId(0),
                         path: paths.intern(Path::new(&[0, 1, 0])),
                     },
-                    expected: 1,
+                    expected: Some(1),
                     actions: vec![],
                 },
             ]
