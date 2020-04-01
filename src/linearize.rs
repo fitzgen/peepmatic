@@ -140,7 +140,7 @@ fn linearize_optimization(paths: &mut PathInterner, opt: &Optimization) -> linea
         let (operation, expected) = pattern.to_linear_match_op(&lhs_canonicalizer, path);
         let mut inc = linear::Increment {
             operation,
-            expected: Some(expected),
+            expected,
             actions: vec![],
         };
 
@@ -617,24 +617,24 @@ impl Pattern<'_> {
         &self,
         lhs_canonicalizer: &LhsCanonicalizer,
         path: PathId,
-    ) -> (linear::MatchOp, u32) {
+    ) -> (linear::MatchOp, Option<u32>) {
         use std::convert::TryInto;
         match self {
             Pattern::ValueLiteral(ValueLiteral::Integer(Integer { value, .. })) => (
                 linear::MatchOp::IntegerValue { path },
-                (*value).try_into().unwrap(),
+                Some((*value).try_into().unwrap()),
             ),
             Pattern::ValueLiteral(ValueLiteral::Boolean(Boolean { value, .. })) => {
-                (linear::MatchOp::BooleanValue { path }, *value as u32)
+                (linear::MatchOp::BooleanValue { path }, Some(*value as u32))
             }
             Pattern::Constant(Constant { id, .. }) => {
                 if lhs_canonicalizer.is_in_scope(id)
                     && lhs_canonicalizer.first_occurrence(id) != path
                 {
                     let id = lhs_canonicalizer.get(id);
-                    (linear::MatchOp::Eq { id, path }, 1)
+                    (linear::MatchOp::Eq { id, path }, Some(1))
                 } else {
-                    (linear::MatchOp::IsConst { path }, 1)
+                    (linear::MatchOp::IsConst { path }, Some(1))
                 }
             }
             Pattern::Variable(Variable { id, .. }) => {
@@ -642,9 +642,9 @@ impl Pattern<'_> {
                     && lhs_canonicalizer.first_occurrence(id) != path
                 {
                     let id = lhs_canonicalizer.get(id);
-                    (linear::MatchOp::Eq { id, path }, 1)
+                    (linear::MatchOp::Eq { id, path }, Some(1))
                 } else {
-                    (linear::MatchOp::Nop, 0)
+                    (linear::MatchOp::Nop, None)
                 }
             }
             Pattern::Operation(op) => (
@@ -654,7 +654,7 @@ impl Pattern<'_> {
                 // becomes a C-style `enum`). This would allow the matcher to
                 // avoid an extra switch-and-translate, and instead use the
                 // opcode as the lookup key for the transition directly.
-                match op.operator {
+                Some(match op.operator {
                     Operator::Ashr => 0,
                     Operator::Bor => 1,
                     Operator::Iadd => 2,
@@ -663,7 +663,7 @@ impl Pattern<'_> {
                     Operator::Imul => 5,
                     Operator::Ishl => 6,
                     Operator::Sshr => 7,
-                },
+                }),
             ),
         }
     }
@@ -771,7 +771,7 @@ mod tests {
         |paths: &mut PathInterner| linear::Optimization {
             increments: vec![linear::Increment {
                 operation: linear::MatchOp::Nop,
-                expected: Some(0),
+                expected: None,
                 actions: vec![
                     linear::Action::AddToLhsScope {
                         id: linear::LhsId(0),

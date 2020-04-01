@@ -1,6 +1,9 @@
 //! Passes over the linear IR.
 
-use peepmatic_runtime::linear;
+use peepmatic_runtime::{
+    linear,
+    paths::{PathId, PathInterner},
+};
 use std::cmp::Ordering;
 
 /// Sort a set of optimizations from least to most general.
@@ -23,14 +26,28 @@ use std::cmp::Ordering;
 /// and we are matching `(imul 4 (..))`, then we want to apply the second
 /// optimization, because it is more specific than the first.
 pub fn sort_least_to_most_general(opts: &mut linear::Optimizations) {
+    let linear::Optimizations {
+        ref mut optimizations,
+        ref paths,
+    } = opts;
+
     // NB: we *cannot* use an unstable sort here, because we want deterministic
     // compilation of optimizations to automata.
-    opts.optimizations.sort_by(compare_optimization_generality);
+    optimizations.sort_by(|a, b| compare_optimization_generality(paths, a, b));
 }
 
-fn compare_optimization_generality(a: &linear::Optimization, b: &linear::Optimization) -> Ordering {
+fn compare_optimization_generality(
+    paths: &PathInterner,
+    a: &linear::Optimization,
+    b: &linear::Optimization,
+) -> Ordering {
     for (a, b) in a.increments.iter().zip(b.increments.iter()) {
-        let c = compare_match_op_generality(a.operation, b.operation);
+        let c = compare_match_op_generality(paths, a.operation, b.operation);
+        if c != Ordering::Equal {
+            return c;
+        }
+
+        let c = a.expected.cmp(&b.expected).reverse();
         if c != Ordering::Equal {
             return c;
         }
@@ -41,32 +58,70 @@ fn compare_optimization_generality(a: &linear::Optimization, b: &linear::Optimiz
     a.increments.len().cmp(&b.increments.len()).reverse()
 }
 
-fn compare_match_op_generality(a: linear::MatchOp, b: linear::MatchOp) -> Ordering {
+fn compare_match_op_generality(
+    paths: &PathInterner,
+    a: linear::MatchOp,
+    b: linear::MatchOp,
+) -> Ordering {
     match (a, b) {
-        (a, b) if a == b => Ordering::Equal,
-
+        (linear::MatchOp::Opcode { path: a }, linear::MatchOp::Opcode { path: b }) => {
+            compare_paths(paths, a, b)
+        }
         (linear::MatchOp::Opcode { .. }, _) => Ordering::Less,
         (_, linear::MatchOp::Opcode { .. }) => Ordering::Greater,
 
+        (linear::MatchOp::IntegerValue { path: a }, linear::MatchOp::IntegerValue { path: b }) => {
+            compare_paths(paths, a, b)
+        }
         (linear::MatchOp::IntegerValue { .. }, _) => Ordering::Less,
         (_, linear::MatchOp::IntegerValue { .. }) => Ordering::Greater,
 
+        (linear::MatchOp::BooleanValue { path: a }, linear::MatchOp::BooleanValue { path: b }) => {
+            compare_paths(paths, a, b)
+        }
         (linear::MatchOp::BooleanValue { .. }, _) => Ordering::Less,
         (_, linear::MatchOp::BooleanValue { .. }) => Ordering::Greater,
 
+        (linear::MatchOp::IsConst { path: a }, linear::MatchOp::IsConst { path: b }) => {
+            compare_paths(paths, a, b)
+        }
         (linear::MatchOp::IsConst { .. }, _) => Ordering::Less,
         (_, linear::MatchOp::IsConst { .. }) => Ordering::Greater,
 
+        (
+            linear::MatchOp::Eq {
+                path: path_a,
+                id: id_a,
+            },
+            linear::MatchOp::Eq {
+                path: path_b,
+                id: id_b,
+            },
+        ) => compare_paths(paths, path_a, path_b).then(id_a.cmp(&id_b)),
         (linear::MatchOp::Eq { .. }, _) => Ordering::Less,
         (_, linear::MatchOp::Eq { .. }) => Ordering::Greater,
 
+        (linear::MatchOp::IsPowerOfTwo { id: a }, linear::MatchOp::IsPowerOfTwo { id: b }) => {
+            a.cmp(&b)
+        }
         (linear::MatchOp::IsPowerOfTwo { .. }, _) => Ordering::Less,
         (_, linear::MatchOp::IsPowerOfTwo { .. }) => Ordering::Greater,
 
+        (linear::MatchOp::BitWidth { id: a }, linear::MatchOp::BitWidth { id: b }) => a.cmp(&b),
         (linear::MatchOp::BitWidth { .. }, _) => Ordering::Less,
         (_, linear::MatchOp::BitWidth { .. }) => Ordering::Greater,
 
         (linear::MatchOp::Nop, _) => Ordering::Greater,
+    }
+}
+
+fn compare_paths(paths: &PathInterner, a: PathId, b: PathId) -> Ordering {
+    if a == b {
+        Ordering::Equal
+    } else {
+        let a = paths.lookup(a);
+        let b = paths.lookup(b);
+        a.0.cmp(&b.0)
     }
 }
 
@@ -134,14 +189,14 @@ pub fn insert_fallback_optimizations(opts: &mut linear::Optimizations) {
         let last_opt_index = new_opts.len() - 1;
         let last_opt = &new_opts[last_opt_index];
 
-        // Count how many match operations are in the shared prefix of this
-        // optimization and the last. That is, the match operations diverge at
-        // the `i`th increment.
+        // Count how many inrements are in the shared prefix of this
+        // optimization and the last (ignoring actions). That is, the increment
+        // chains diverge at the `i`th increment.
         let i: usize = this_opt
             .increments
             .iter()
             .zip(last_opt.increments.iter())
-            .take_while(|(a, b)| a.operation == b.operation)
+            .take_while(|(a, b)| a.operation == b.operation && a.expected == b.expected)
             .map(|_| 1_usize)
             .sum();
 
@@ -150,6 +205,15 @@ pub fn insert_fallback_optimizations(opts: &mut linear::Optimizations) {
         // operations means an optimization is more specific, we cannot have the
         // last optimization's match operations be fully shared with this one.
         assert!(i < last_opt.increments.len());
+
+        // When the divergence is only in the expected result, not in the
+        // matching operation, then we don't need to insert any fallback
+        // optimizations.
+        if last_opt.increments[i].operation == this_opt.increments[i].operation {
+            assert!(last_opt.increments[i].expected != this_opt.increments[i].expected);
+            new_opts.push(this_opt.clone());
+            continue;
+        }
 
         for j in (i..last_opt.increments.len()).rev() {
             // Re-borrow here to avoid having an active borrow across the `push`
@@ -181,18 +245,71 @@ pub fn insert_fallback_optimizations(opts: &mut linear::Optimizations) {
     }
 
     opts.optimizations = new_opts;
+
+    // Re-sort to ensure that our new fallback optimizations and their edges are
+    // still sorted for automata construction.
+    sort_least_to_most_general(opts);
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::ast::*;
-    use linear::MatchOp::*;
+    use linear::{LhsId, MatchOp::*};
     use peepmatic_runtime::paths::*;
 
-    #[test]
-    fn test_sort_least_to_most_general() {
-        let source = "
+    macro_rules! sorts_to {
+        ($test_name:ident, $source:expr, $make_expected:expr) => {
+            #[test]
+            fn $test_name() {
+                let buf = wast::parser::ParseBuffer::new($source).expect("should lex OK");
+
+                let opts = match wast::parser::parse::<Optimizations>(&buf) {
+                    Ok(opts) => opts,
+                    Err(mut e) => {
+                        e.set_path(std::path::Path::new(stringify!($test_name)));
+                        e.set_text($source);
+                        eprintln!("{}", e);
+                        panic!("should parse OK")
+                    }
+                };
+
+                if let Err(mut e) = crate::verify(&opts) {
+                    e.set_path(std::path::Path::new(stringify!($test_name)));
+                    e.set_text($source);
+                    eprintln!("{}", e);
+                    panic!("should verify OK")
+                }
+
+                let mut opts = crate::linearize(&opts);
+                sort_least_to_most_general(&mut opts);
+
+                let linear::Optimizations {
+                    mut paths,
+                    optimizations,
+                } = opts;
+
+                let actual: Vec<Vec<_>> = optimizations
+                    .iter()
+                    .map(|o| {
+                        o.increments
+                            .iter()
+                            .map(|i| (i.operation, i.expected))
+                            .collect()
+                    })
+                    .collect();
+
+                let mut p = |p: &[u8]| paths.intern(Path::new(&p));
+                let expected = $make_expected(&mut p);
+
+                assert_eq!(expected, actual);
+            }
+        };
+    }
+
+    sorts_to!(
+        test_sort_least_to_most_general,
+        "
 (=>       $x                                 0)
 (=>       (iadd $x $y)                       0)
 (=>       (iadd $x $x)                       0)
@@ -201,110 +318,44 @@ mod tests {
 (=> (when (iadd $x $C) (bit-width $x 32))    0)
 (=>       (iadd $x 42)                       0)
 (=>       (iadd $x (iadd $y $z))             0)
-";
-
-        let buf = wast::parser::ParseBuffer::new(source).expect("should lex OK");
-
-        let opts = match wast::parser::parse::<Optimizations>(&buf) {
-            Ok(opts) => opts,
-            Err(mut e) => {
-                e.set_path(std::path::Path::new("test_sort_least_to_most_general"));
-                e.set_text(source);
-                eprintln!("{}", e);
-                panic!("should parse OK")
-            }
-        };
-
-        if let Err(mut e) = crate::verify(&opts) {
-            e.set_path(std::path::Path::new("test_sort_least_to_most_general"));
-            e.set_text(source);
-            eprintln!("{}", e);
-            panic!("should verify OK")
-        }
-
-        let mut opts = crate::linearize(&opts);
-
-        assert_eq!(opts.optimizations.len(), 8);
-        sort_least_to_most_general(&mut opts);
-        assert_eq!(opts.optimizations.len(), 8);
-
-        let linear::Optimizations {
-            mut paths,
-            optimizations,
-        } = opts;
-
-        dbg!(&optimizations);
-
-        fn match_ops(opt: &linear::Optimization) -> Vec<linear::MatchOp> {
-            opt.increments.iter().map(|i| i.operation).collect()
-        }
-
-        let mut p = |path: &[u8]| paths.intern(Path::new(&path));
-
-        assert_eq!(
-            match_ops(&optimizations[0]),
+",
+        |p: &mut dyn FnMut(&[u8]) -> PathId| vec![
             vec![
-                linear::MatchOp::Opcode { path: p(&[0]) },
-                linear::MatchOp::Opcode { path: p(&[0, 1]) },
+                (Opcode { path: p(&[0]) }, Some(2)),
+                (Opcode { path: p(&[0, 1]) }, Some(2))
             ],
-        );
-
-        assert_eq!(
-            match_ops(&optimizations[1]),
             vec![
-                linear::MatchOp::Opcode { path: p(&[0]) },
-                linear::MatchOp::IntegerValue { path: p(&[0, 1]) },
+                (Opcode { path: p(&[0]) }, Some(2)),
+                (IntegerValue { path: p(&[0, 1]) }, Some(42))
             ],
-        );
-
-        assert_eq!(
-            match_ops(&optimizations[2]),
             vec![
-                linear::MatchOp::Opcode { path: p(&[0]) },
-                linear::MatchOp::IsConst { path: p(&[0, 1]) },
-                linear::MatchOp::IsPowerOfTwo {
-                    id: linear::LhsId(1),
-                },
+                (Opcode { path: p(&[0]) }, Some(2)),
+                (IsConst { path: p(&[0, 1]) }, Some(1)),
+                (IsPowerOfTwo { id: LhsId(1) }, Some(1))
             ],
-        );
-
-        assert_eq!(
-            match_ops(&optimizations[3]),
             vec![
-                linear::MatchOp::Opcode { path: p(&[0]) },
-                linear::MatchOp::IsConst { path: p(&[0, 1]) },
-                linear::MatchOp::BitWidth {
-                    id: linear::LhsId(0),
-                },
+                (Opcode { path: p(&[0]) }, Some(2)),
+                (IsConst { path: p(&[0, 1]) }, Some(1)),
+                (BitWidth { id: LhsId(0) }, Some(32))
             ],
-        );
-
-        assert_eq!(
-            match_ops(&optimizations[4]),
             vec![
-                linear::MatchOp::Opcode { path: p(&[0]) },
-                linear::MatchOp::IsConst { path: p(&[0, 1]) },
+                (Opcode { path: p(&[0]) }, Some(2)),
+                (IsConst { path: p(&[0, 1]) }, Some(1))
             ],
-        );
-
-        assert_eq!(
-            match_ops(&optimizations[5]),
             vec![
-                linear::MatchOp::Opcode { path: p(&[0]) },
-                linear::MatchOp::Eq {
-                    id: linear::LhsId(0),
-                    path: p(&[0, 1]),
-                },
+                (Opcode { path: p(&[0]) }, Some(2)),
+                (
+                    Eq {
+                        id: LhsId(0),
+                        path: p(&[0, 1])
+                    },
+                    Some(1)
+                )
             ],
-        );
-
-        assert_eq!(
-            match_ops(&optimizations[6]),
-            vec![linear::MatchOp::Opcode { path: p(&[0]) }],
-        );
-
-        assert_eq!(match_ops(&optimizations[7]), vec![linear::MatchOp::Nop]);
-    }
+            vec![(Opcode { path: p(&[0]) }, Some(2))],
+            vec![(Nop, None)]
+        ]
+    );
 
     macro_rules! test_fallback_insertion {
         ($test_name:ident, $source:expr, $make_expected:expr) => {
@@ -330,7 +381,6 @@ mod tests {
                 }
 
                 let mut opts = crate::linearize(&opts);
-
                 sort_least_to_most_general(&mut opts);
                 insert_fallback_optimizations(&mut opts);
 
@@ -383,6 +433,92 @@ mod tests {
                 (Opcode { path: p(&[0, 1]) }, None),
                 (IsConst { path: p(&[0, 1]) }, Some(1)),
             ],
+        ]
+    );
+
+    sorts_to!(
+        expected_edges_are_sorted,
+        "
+(=> (iadd 0 $x) $x)
+(=> (iadd $x 0) $x)
+(=> (imul 1 $x) $x)
+(=> (imul $x 1) $x)
+(=> (imul 2 $x) (ishl $x 1))
+(=> (imul $x 2) (ishl $x 1))
+",
+        |p: &mut dyn FnMut(&[u8]) -> PathId| vec![
+            vec![
+                (Opcode { path: p(&[0]) }, Some(5)),
+                (IntegerValue { path: p(&[0, 0]) }, Some(2))
+            ],
+            vec![
+                (Opcode { path: p(&[0]) }, Some(5)),
+                (IntegerValue { path: p(&[0, 0]) }, Some(1)),
+            ],
+            vec![
+                (Opcode { path: p(&[0]) }, Some(5)),
+                (IntegerValue { path: p(&[0, 1]) }, Some(2))
+            ],
+            vec![
+                (Opcode { path: p(&[0]) }, Some(5)),
+                (IntegerValue { path: p(&[0, 1]) }, Some(1)),
+            ],
+            vec![
+                (Opcode { path: p(&[0]) }, Some(2)),
+                (IntegerValue { path: p(&[0, 0]) }, Some(0)),
+            ],
+            vec![
+                (Opcode { path: p(&[0]) }, Some(2)),
+                (IntegerValue { path: p(&[0, 1]) }, Some(0)),
+            ],
+        ]
+    );
+
+    test_fallback_insertion!(
+        no_fallback_insertion_when_divergence_is_at_same_operation_but_different_expected_result,
+        "
+(=> 0 0)
+(=> 1 1)
+(=> 2 2)
+(=> 3 3)
+(=> 4 4)
+(=> 5 5)
+",
+        |p: &mut dyn FnMut(&[u8]) -> PathId| vec![
+            vec![(IntegerValue { path: p(&[0]) }, Some(5))],
+            vec![(IntegerValue { path: p(&[0]) }, Some(4))],
+            vec![(IntegerValue { path: p(&[0]) }, Some(3))],
+            vec![(IntegerValue { path: p(&[0]) }, Some(2))],
+            vec![(IntegerValue { path: p(&[0]) }, Some(1))],
+            vec![(IntegerValue { path: p(&[0]) }, Some(0))],
+        ]
+    );
+
+    test_fallback_insertion!(
+        no_fallbacks_after_same_op_with_different_expected_results_with_long_tail,
+        "
+(=> (iadd 1 (iadd $x (iadd $y $z))) 0)
+(=> (iadd 0 $C) 0)
+",
+        |p: &mut dyn FnMut(&[u8]) -> PathId| vec![
+            vec![
+                (Opcode { path: p(&[0]) }, Some(2)),
+                (IntegerValue { path: p(&[0, 0]) }, Some(1)),
+                (Opcode { path: p(&[0, 1]) }, Some(2)),
+                (
+                    Opcode {
+                        path: p(&[0, 1, 1])
+                    },
+                    Some(2)
+                )
+            ],
+            // Note: no fallbacks inserted here because they branch on different
+            // integer values.
+            vec![
+                (Opcode { path: p(&[0]) }, Some(2)),
+                (IntegerValue { path: p(&[0, 0]) }, Some(0)),
+                (IsConst { path: p(&[0, 1]) }, Some(1))
+            ]
         ]
     );
 }

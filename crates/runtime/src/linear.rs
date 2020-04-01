@@ -106,7 +106,7 @@ pub enum MatchOp {
 
 /// A canonicalized identifier for a left-hand side value that was bound in a
 /// pattern.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct LhsId(pub u32);
 
 /// A canonicalized identifier for a right-hand side value.
