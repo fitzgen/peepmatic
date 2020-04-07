@@ -9,8 +9,10 @@ publish = false
 
 [dependencies]
 arbitrary = { version = "0.4.1", features = ["derive"] }
+bincode = "1.2.1"
 env_logger = "0.7.1"
 fst = "0.4.1"
 log = "0.4.8"
-peepmatic-automata = { path = "../automata" }
+peepmatic-automata = { path = "../automata", features = ["serde"] }
 rand = { version = "0.7.3", features = ["small_rng"] }
+serde = "1.0.106"

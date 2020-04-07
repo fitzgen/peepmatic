@@ -1,7 +1,21 @@
 //! Helpers for fuzzing the `peepmatic-automata` crate.
 
-use peepmatic_automata::Builder;
+use peepmatic_automata::{Automata, Builder, Output};
+use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
+use std::hash::Hash;
+
+fn serde_roundtrip<TAlphabet, TState, TOutput>(
+    automata: Automata<TAlphabet, TState, TOutput>,
+) -> Automata<TAlphabet, TState, TOutput>
+where
+    TAlphabet: Serialize + for<'de> Deserialize<'de> + Ord + Eq + Hash,
+    TState: Serialize + for<'de> Deserialize<'de> + Clone + Eq + Hash,
+    TOutput: Serialize + for<'de> Deserialize<'de> + Output,
+{
+    let encoded: Vec<u8> = bincode::serialize(&automata).expect("should serialize OK");
+    bincode::deserialize(&encoded).expect("should deserialize OK")
+}
 
 /// Construct an automata from the the given input-output pairs, and assert
 /// that:
@@ -65,6 +79,7 @@ pub fn simple_automata(input_output_pairs: Vec<Vec<(u8, Vec<u8>)>>) {
     }
 
     let automata = builder.finish();
+    let automata = serde_roundtrip(automata);
 
     // Assert that each of our input strings yields the expected output.
     for (input, expected_output) in &expected {
@@ -116,6 +131,7 @@ pub fn fst_differential(map: HashMap<Vec<u8>, u64>) {
 
     let fst = fst.into_map();
     let automata = builder.finish();
+    let automata = serde_roundtrip(automata);
 
     for inp in inputs {
         // Check we have the same result as `fst` for inputs we know are in the

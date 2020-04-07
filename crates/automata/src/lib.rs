@@ -49,6 +49,9 @@
 
 mod output_impls;
 
+#[cfg(feature = "serde")]
+mod serde_impls;
+
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::convert::TryInto;
 use std::hash::Hash;
@@ -283,12 +286,20 @@ where
     /// Finish building this transducer automata and return the constructed
     /// `Automata`.
     ///
+    /// ## Panics
     ///
+    /// Panics if this builder is empty, and has never had anything inserted
+    /// into it.
+    ///
+    /// Panics if the last insertion's
+    /// [`InsertionBuilder`][crate::InsertionBuilder] did not call its
+    /// [finish][crate::InsertionBuilder::finish] method.
     pub fn finish(&mut self) -> Automata<TAlphabet, TState, TOutput> {
         let mut inner = self
             .inner
             .take()
             .expect("cannot use `Builder` anymore after calling `finish` on it");
+        assert!(inner.last_insertion_finished);
 
         let wip_start = inner.unfinished[0];
 
@@ -332,7 +343,14 @@ where
             final_states,
             start_state,
         };
-        debug_assert!(automata.representation_is_ok());
+
+        #[cfg(debug_assertions)]
+        {
+            if let Err(msg) = automata.check_representation() {
+                panic!("Automata::check_representation failed: {}", msg);
+            }
+        }
+
         automata
     }
 }
@@ -781,21 +799,34 @@ where
     /// when deserializing an `Automata`.
     ///
     /// Returns `true` if the representation is okay, `false` otherwise.
-    fn representation_is_ok(&self) -> bool {
-        macro_rules! ensure {
-            ($condition:expr) => {
-                if !$condition {
-                    return false;
+    fn check_representation(&self) -> Result<(), &'static str> {
+        macro_rules! bail_if {
+            ($condition:expr, $msg:expr) => {
+                if $condition {
+                    return Err($msg);
                 }
             };
         }
 
-        ensure!(self.state_data.len() == self.transitions.len());
-        ensure!(!self.final_states.is_empty());
+        bail_if!(
+            self.state_data.len() != self.transitions.len(),
+            "different number of states and transition sets"
+        );
+        bail_if!(
+            self.final_states.is_empty(),
+            "the set of final states is empty"
+        );
 
-        ensure!((self.start_state.0 as usize) < self.transitions.len());
+        bail_if!(
+            (self.start_state.0 as usize) >= self.transitions.len(),
+            "the start state is not a valid state"
+        );
+
         for (f, _out) in &self.final_states {
-            ensure!((f.0 as usize) < self.transitions.len());
+            bail_if!(
+                (f.0 as usize) >= self.transitions.len(),
+                "one of the final states is not a valid state"
+            );
         }
 
         // Walk the state transition graph and ensure that
@@ -821,7 +852,10 @@ where
 
                         // A transition to a state that we walked through to get
                         // here means that there is a cycle.
-                        ensure!(!on_stack.contains(to_state));
+                        bail_if!(
+                            on_stack.contains(to_state),
+                            "there is a cycle in the state transition graph"
+                        );
 
                         stack.extend(
                             iter::once((Traversal::Stop, *to_state))
@@ -831,7 +865,10 @@ where
 
                     if !has_any_transitions {
                         // All paths must end in a final state.
-                        ensure!(self.final_states.contains_key(&state));
+                        bail_if!(
+                            !self.final_states.contains_key(&state),
+                            "a path through the state transition graph does not end in a final state"
+                        );
                     }
                 }
                 Some((Traversal::Stop, state)) => {
@@ -841,7 +878,7 @@ where
             }
         }
 
-        return true;
+        return Ok(());
 
         enum Traversal {
             Start,
