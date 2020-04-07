@@ -9,7 +9,7 @@ fn serde_roundtrip<TAlphabet, TState, TOutput>(
     automata: Automata<TAlphabet, TState, TOutput>,
 ) -> Automata<TAlphabet, TState, TOutput>
 where
-    TAlphabet: Serialize + for<'de> Deserialize<'de> + Ord + Eq + Hash,
+    TAlphabet: Serialize + for<'de> Deserialize<'de> + Clone + Eq + Hash + Ord,
     TState: Serialize + for<'de> Deserialize<'de> + Clone + Eq + Hash,
     TOutput: Serialize + for<'de> Deserialize<'de> + Output,
 {

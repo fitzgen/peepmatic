@@ -76,7 +76,7 @@ impl<'de> Visitor<'de> for U32Visitor {
 
 impl<TAlphabet, TState, TOutput> Serialize for Automata<TAlphabet, TState, TOutput>
 where
-    TAlphabet: Serialize + Ord + Eq + Hash,
+    TAlphabet: Serialize + Clone + Eq + Hash + Ord,
     TState: Serialize + Clone + Eq + Hash,
     TOutput: Serialize + Output,
 {
@@ -103,7 +103,7 @@ where
 
 impl<'de, TAlphabet, TState, TOutput> Deserialize<'de> for Automata<TAlphabet, TState, TOutput>
 where
-    TAlphabet: 'de + Deserialize<'de> + Ord + Eq + Hash,
+    TAlphabet: 'de + Deserialize<'de> + Clone + Eq + Hash + Ord,
     TState: 'de + Deserialize<'de> + Clone + Eq + Hash,
     TOutput: 'de + Deserialize<'de> + Output,
 {
@@ -123,7 +123,7 @@ where
 
 struct AutomataVisitor<'de, TAlphabet, TState, TOutput>
 where
-    TAlphabet: 'de + Deserialize<'de> + Ord + Eq + Hash,
+    TAlphabet: 'de + Deserialize<'de> + Clone + Eq + Hash + Ord,
     TState: 'de + Deserialize<'de> + Clone + Eq + Hash,
     TOutput: 'de + Deserialize<'de> + Output,
 {
@@ -133,7 +133,7 @@ where
 impl<'de, TAlphabet, TState, TOutput> Visitor<'de>
     for AutomataVisitor<'de, TAlphabet, TState, TOutput>
 where
-    TAlphabet: 'de + Deserialize<'de> + Ord + Eq + Hash,
+    TAlphabet: 'de + Deserialize<'de> + Clone + Eq + Hash + Ord,
     TState: 'de + Deserialize<'de> + Clone + Eq + Hash,
     TOutput: 'de + Deserialize<'de> + Output,
 {

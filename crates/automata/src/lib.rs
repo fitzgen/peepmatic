@@ -132,7 +132,7 @@ use std::mem;
 ///     MyInt(3),
 /// );
 /// ```
-pub trait Output: Sized + Eq + Hash {
+pub trait Output: Sized + Eq + Hash + Clone {
     /// Construct the empty instance.
     fn empty() -> Self;
 
@@ -222,7 +222,7 @@ pub trait Output: Sized + Eq + Hash {
 #[derive(Debug, Clone)]
 pub struct Builder<TAlphabet, TState, TOutput>
 where
-    TAlphabet: Ord + Eq + Hash,
+    TAlphabet: Clone + Eq + Hash + Ord,
     TState: Clone + Eq + Hash,
     TOutput: Output,
 {
@@ -231,7 +231,7 @@ where
 
 impl<TAlphabet, TState, TOutput> Builder<TAlphabet, TState, TOutput>
 where
-    TAlphabet: Ord + Eq + Hash,
+    TAlphabet: Clone + Eq + Hash + Ord,
     TState: Clone + Eq + Hash,
     TOutput: Output,
 {
@@ -361,7 +361,7 @@ struct State(u32);
 #[derive(Clone, Debug)]
 struct BuilderInner<TAlphabet, TState, TOutput>
 where
-    TAlphabet: Ord + Eq + Hash,
+    TAlphabet: Clone + Eq + Hash + Ord,
     TState: Clone + Eq + Hash,
     TOutput: Output,
 {
@@ -388,7 +388,7 @@ where
 
 impl<TAlphabet, TState, TOutput> BuilderInner<TAlphabet, TState, TOutput>
 where
-    TAlphabet: Ord + Eq + Hash,
+    TAlphabet: Clone + Eq + Hash + Ord,
     TState: Clone + Eq + Hash,
     TOutput: Output,
 {
@@ -441,6 +441,7 @@ where
                     state_data: wip.state_data.clone(),
                     transitions: wip
                         .transitions
+                        .clone()
                         .into_iter()
                         .map(|(input, (id, output))| {
                             let id = match id {
@@ -454,8 +455,9 @@ where
                         })
                         .collect(),
                     is_final: wip.is_final,
-                    final_output: wip.final_output,
+                    final_output: wip.final_output.clone(),
                 });
+                self.already_frozen.insert(wip, id);
                 id
             };
 
@@ -482,7 +484,7 @@ where
 #[derive(Debug)]
 pub struct InsertionBuilder<'a, TAlphabet, TState, TOutput>
 where
-    TAlphabet: Ord + Eq + Hash,
+    TAlphabet: Clone + Eq + Hash + Ord,
     TState: Clone + Eq + Hash,
     TOutput: Output,
 {
@@ -498,7 +500,7 @@ where
 
 impl<'a, TAlphabet, TState, TOutput> InsertionBuilder<'a, TAlphabet, TState, TOutput>
 where
-    TAlphabet: Ord + Eq + Hash,
+    TAlphabet: Clone + Eq + Hash + Ord,
     TState: Clone + Eq + Hash,
     TOutput: Output,
 {
@@ -663,7 +665,7 @@ enum WipOrFrozenStateId {
 #[derive(Clone, Debug, Hash)]
 struct FrozenState<TAlphabet, TState, TOutput>
 where
-    TAlphabet: Ord + Eq + Hash,
+    TAlphabet: Clone + Eq + Hash + Ord,
     TState: Clone + Eq + Hash,
     TOutput: Output,
 {
@@ -682,7 +684,7 @@ where
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 struct WipState<TAlphabet, TState, TOutput>
 where
-    TAlphabet: Ord + Eq + Hash,
+    TAlphabet: Clone + Eq + Hash + Ord,
     TState: Clone + Eq + Hash,
     TOutput: Output,
 {
@@ -694,7 +696,7 @@ where
 
 impl<TAlphabet, TState, TOutput> WipState<TAlphabet, TState, TOutput>
 where
-    TAlphabet: Ord + Eq + Hash,
+    TAlphabet: Clone + Eq + Hash + Ord,
     TState: Clone + Eq + Hash,
     TOutput: Output,
 {
@@ -731,7 +733,7 @@ where
 #[derive(Debug, Clone)]
 pub struct Automata<TAlphabet, TState, TOutput>
 where
-    TAlphabet: Ord + Eq + Hash,
+    TAlphabet: Clone + Eq + Hash + Ord,
     TState: Clone + Eq + Hash,
     TOutput: Output,
 {
@@ -751,7 +753,7 @@ where
 
 impl<TAlphabet, TState, TOutput> Automata<TAlphabet, TState, TOutput>
 where
-    TAlphabet: Ord + Eq + Hash,
+    TAlphabet: Clone + Eq + Hash + Ord,
     TState: Clone + Eq + Hash,
     TOutput: Output,
 {
@@ -919,7 +921,7 @@ where
 #[derive(Debug, Clone)]
 pub struct Query<'a, TAlphabet, TState, TOutput>
 where
-    TAlphabet: Ord + Eq + Hash,
+    TAlphabet: Clone + Eq + Hash + Ord,
     TState: Clone + Eq + Hash,
     TOutput: Output,
 {
@@ -929,7 +931,7 @@ where
 
 impl<'a, TAlphabet, TState, TOutput> Query<'a, TAlphabet, TState, TOutput>
 where
-    TAlphabet: Ord + Eq + Hash,
+    TAlphabet: Clone + Eq + Hash + Ord,
     TState: Clone + Eq + Hash,
     TOutput: Output,
 {
