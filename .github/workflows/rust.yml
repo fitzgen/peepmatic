@@ -14,3 +14,21 @@ jobs:
       run: cargo build --verbose
     - name: Run tests
       run: cargo test --verbose
+
+  fuzz_simple_automata:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: Install cargo fuzz
+      run: cargo install cargo-fuzz
+    - name: Run simple_automata fuzz target
+      run: cargo fuzz run simple_automata -Oa --sanitizer=none -- -max_total_time=18000
+
+  fuzz_fst_differential:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: Install cargo fuzz
+      run: cargo install cargo-fuzz
+    - name: Run fst_differential fuzz target
+      run: cargo fuzz run fst_differential -Oa --sanitizer=none -- -max_total_time=18000
