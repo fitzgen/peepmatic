@@ -19,3 +19,4 @@ branch = "add-get-unsat-core-and-other-small-fixups"
 features = ["static-link-z3"]
 
 [workspace]
+members = ["fuzz"]

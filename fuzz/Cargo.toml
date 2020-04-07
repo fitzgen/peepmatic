@@ -1,0 +1,27 @@
+[package]
+name = "peepmatic-fuzz"
+version = "0.0.0"
+authors = ["Automatically generated"]
+publish = false
+edition = "2018"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.3"
+
+[dependencies.peepmatic-fuzzing]
+path = "../crates/fuzzing"
+
+[[bin]]
+name = "simple_automata"
+path = "fuzz_targets/simple_automata.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fst_differential"
+path = "fuzz_targets/fst_differential.rs"
+test = false
+doc = false

@@ -15,7 +15,7 @@
 //! ```lisp
 //! (=> (when (imul $x $C)
 //!           (is-power-of-two $C))
-//!     (ishl $x $C))
+//!     (ishl $x $(log2 C)))
 //! ```
 //!
 //! Then we should get the following linear chain of "increments":

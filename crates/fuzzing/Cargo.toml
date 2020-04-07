@@ -1,0 +1,16 @@
+[package]
+name = "peepmatic-fuzzing"
+version = "0.1.0"
+authors = ["Nick Fitzgerald <fitzgen@gmail.com>"]
+edition = "2018"
+publish = false
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+arbitrary = { version = "0.4.1", features = ["derive"] }
+env_logger = "0.7.1"
+fst = "0.4.1"
+log = "0.4.8"
+peepmatic-automata = { path = "../automata" }
+rand = { version = "0.7.3", features = ["small_rng"] }
