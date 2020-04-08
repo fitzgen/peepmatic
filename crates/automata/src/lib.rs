@@ -52,6 +52,9 @@ mod output_impls;
 #[cfg(feature = "serde")]
 mod serde_impls;
 
+#[cfg(feature = "dot")]
+pub mod dot;
+
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::convert::TryInto;
 use std::hash::Hash;
@@ -599,8 +602,8 @@ where
     ///
     /// Failure to call this method before this `InsertionBuilder` is dropped
     /// means that the insertion is *not* committed in the builder, and future
-    /// calls to [`InsertionBuilder::insert`][crate::InsertionBuilder::insert]
-    /// will panic!
+    /// calls to [`InsertionBuilder::next`][crate::InsertionBuilder::next] will
+    /// panic!
     pub fn finish(self) {
         assert!(!self.inner.unfinished.is_empty());
         assert_eq!(
@@ -887,8 +890,6 @@ where
             Stop,
         }
     }
-
-    // TODO FITZGEN: add a method to emit a GraphViz dot file for this automata.
 }
 
 /// A low-level query of an `Automata`.
