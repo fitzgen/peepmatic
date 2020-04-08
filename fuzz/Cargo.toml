@@ -25,3 +25,9 @@ name = "fst_differential"
 path = "fuzz_targets/fst_differential.rs"
 test = false
 doc = false
+
+[[bin]]
+name = "parser"
+path = "fuzz_targets/parser.rs"
+test = false
+doc = false

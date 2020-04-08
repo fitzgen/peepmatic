@@ -24,7 +24,7 @@ jobs:
     - name: Build fuzz target
       run: cargo fuzz build simple_automata -Oa --sanitizer=none
     - name: Run simple_automata fuzz target
-      run: cargo fuzz run simple_automata -Oa --sanitizer=none -- -runs=50000
+      run: cargo fuzz run simple_automata -Oa --sanitizer=none -- -max_total_time=300
 
   fuzz_fst_differential:
     runs-on: ubuntu-latest
@@ -35,4 +35,15 @@ jobs:
     - name: Build fuzz target
       run: cargo fuzz build fst_differential -Oa --sanitizer=none
     - name: Run fst_differential fuzz target
-      run: cargo fuzz run fst_differential -Oa --sanitizer=none -- -runs=5000
+      run: cargo fuzz run fst_differential -Oa --sanitizer=none -- -max_total_time=300
+
+  fuzz_parser:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: Install cargo fuzz
+      run: cargo install cargo-fuzz
+    - name: Build fuzz target
+      run: cargo fuzz build parser -Oa --sanitizer=none
+    - name: Run parser fuzz target
+      run: cargo fuzz run parser -Oa --sanitizer=none -- -max_total_time=300
