@@ -125,6 +125,17 @@ fn compare_paths(paths: &PathInterner, a: PathId, b: PathId) -> Ordering {
     }
 }
 
+/// Are the given optimizations sorted from least to most general?
+fn is_sorted(opts: &linear::Optimizations) -> bool {
+    for window in opts.optimizations.windows(2) {
+        match compare_optimization_generality(&opts.paths, &window[0], &window[1]) {
+            Ordering::Less | Ordering::Equal => continue,
+            Ordering::Greater => return false,
+        }
+    }
+    true
+}
+
 /// Insert fallback optimizations for when we partially match one optimzation
 /// that subsumes another, but then it doesn't work out.
 ///
@@ -179,6 +190,7 @@ fn compare_paths(paths: &PathInterner, a: PathId, b: PathId) -> Ordering {
 /// The optimizations must already be sorted least-to-most general before
 /// running this pass.
 pub fn insert_fallback_optimizations(opts: &mut linear::Optimizations) {
+    debug_assert!(is_sorted(opts));
     assert!(!opts.optimizations.is_empty());
 
     let mut new_opts = vec![opts.optimizations[0].clone()];
@@ -249,6 +261,94 @@ pub fn insert_fallback_optimizations(opts: &mut linear::Optimizations) {
     // Re-sort to ensure that our new fallback optimizations and their edges are
     // still sorted for automata construction.
     sort_least_to_most_general(opts);
+}
+
+/// Ensure that we emit match operations in a consistent order.
+///
+/// There are many linear optimizations, each of which have their own sequence
+/// of match operations that need to be tested. But when interpreting the
+/// automata against some instructions, we only perform a single sequence of
+/// match operations, and at any given moment, we only want one match operation
+/// to interpret next. This means that two optimizations that are next to each
+/// other in the sorting must have their shared prefixes diverge on an
+/// **expected result edge**, not on which match operation to preform next. And
+/// if they have zero shared prefix, then we need to create one, that
+/// immediately divereges on the expected result.
+///
+/// For example, consider these two patterns that don't have any shared prefix:
+///
+/// ```lisp
+/// (=> (iadd $x $y) ...)
+/// (=> $C ...)
+/// ```
+///
+/// These produce the following linear match operations and expected results:
+///
+/// ```text
+/// opcode @ 0 --iadd-->
+/// is-const? @ 0 --true-->
+/// ```
+///
+/// In order to ensure that we only have one match operation to interpret at any
+/// given time when evaluating the automata, this pass transforms the second
+/// optimization so that it shares a prefix match operation, but diverges on the
+/// expected result:
+///
+/// ```text
+/// opcode @ 0 --iadd-->
+/// opcode @ 0 --(else)--> is-const? @ 0 --true-->
+/// ```
+pub fn match_in_same_order(opts: &mut linear::Optimizations) {
+    debug_assert!(is_sorted(opts));
+    assert!(!opts.optimizations.is_empty());
+
+    let mut prefix = vec![];
+
+    for opt in &mut opts.optimizations {
+        assert!(!opt.increments.is_empty());
+
+        let mut old_increments = opt.increments.iter().peekable();
+        let mut new_increments = vec![];
+
+        for (last_op, last_expected) in &prefix {
+            match old_increments.peek() {
+                None => {
+                    break;
+                }
+                Some(inc) if *last_op == inc.operation => {
+                    let inc = old_increments.next().unwrap();
+                    new_increments.push(inc.clone());
+                    if inc.expected != *last_expected {
+                        break;
+                    }
+                }
+                Some(_) => {
+                    new_increments.push(linear::Increment {
+                        operation: *last_op,
+                        expected: None,
+                        actions: vec![],
+                    });
+                    if last_expected.is_some() {
+                        break;
+                    }
+                }
+            }
+        }
+
+        new_increments.extend(old_increments.cloned());
+        assert!(new_increments.len() >= opt.increments.len());
+        opt.increments = new_increments;
+
+        prefix.clear();
+        prefix.extend(
+            opt.increments
+                .iter()
+                .map(|inc| (inc.operation, inc.expected)),
+        );
+    }
+
+    // Should still be sorted after this pass.
+    debug_assert!(is_sorted(&opts));
 }
 
 #[cfg(test)]
