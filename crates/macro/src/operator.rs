@@ -17,6 +17,8 @@ pub fn peepmatic(input: TokenStream) -> TokenStream {
         Err(e) => return e.to_compile_error().into(),
     };
 
+    let num_operators = variants.len();
+
     let operator = create_enum_operator(&input.attrs, &variants);
     let arity = match create_arity(&variants) {
         Ok(a) => a,
@@ -30,6 +32,11 @@ pub fn peepmatic(input: TokenStream) -> TokenStream {
         impl Operator {
             #arity
             #type_methods
+
+            /// Get the total number of different operators.
+            pub const fn num_operators() -> usize {
+                #num_operators
+            }
         }
     };
 

@@ -14,6 +14,7 @@ use std::time;
 
 pub mod automata;
 pub mod parser;
+pub mod compile;
 
 /// A quickcheck-style runner for fuzz targets.
 ///
