@@ -11,7 +11,7 @@ anyhow = "1.0.27"
 peepmatic-automata = { version = "0.1.0", path = "crates/automata", features = ["dot"] }
 peepmatic-macro = { version = "0.1.0", path = "crates/macro" }
 peepmatic-runtime = { version = "0.1.0", path = "crates/runtime" }
-wast = "12.0.0"
+wast = "13.0.0"
 
 # Waiting on https://github.com/prove-rs/z3.rs/pull/71 to merge.
 [dependencies.z3]

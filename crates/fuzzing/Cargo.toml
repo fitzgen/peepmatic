@@ -17,4 +17,4 @@ peepmatic = { path = "../.." }
 peepmatic-automata = { path = "../automata", features = ["serde"] }
 rand = { version = "0.7.3", features = ["small_rng"] }
 serde = "1.0.106"
-wast = "12.0.0"
+wast = "13.0.0"
