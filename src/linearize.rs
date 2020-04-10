@@ -23,7 +23,7 @@
 //! ```ignore
 //! [
 //!   // ( Match Operation, Expected Value, Actions )
-//!   ( Opcode@0,           imul,           [AddToLhsScope(x@0.0), AddToLhsScope(C@0.1), ..] ),
+//!   ( Opcode@0,           imul,           [BindLhs(x@0.0), BindLhs(C@0.1), ..] ),
 //!   ( IsConst(C),         true,           [] ),
 //!   ( IsPowerOfTwo(C),    true,           [] ),
 //! ]
@@ -40,10 +40,9 @@
 //!
 //! Here are the general principles that linearization should adhere to:
 //!
-//! * We must never have a scope-binding action (i.e. `AddToLhsScope`) until
-//!   after we know that the LHS being bound exists. For example, we can't bind
-//!   the `$x` or `$C` in `(imul $x $C)` until we've matched an `imul`
-//!   instruction.
+//! * We must never have a scope-binding action (i.e. `BindLhs`) until after we
+//!   know that the LHS being bound exists. For example, we can't bind the `$x`
+//!   or `$C` in `(imul $x $C)` until we've matched an `imul` instruction.
 //!
 //! * Actions should be pushed as early in the optimization's increment chain as
 //!   they can be. This means the tail has fewer side effects, and is therefore
@@ -337,7 +336,7 @@ impl<'a> LhsCanonicalizer<'a> {
 
                             let (id, is_new) = self.canonicalize_id(id, child_path_id);
                             if is_new {
-                                actions.push(linear::Action::AddToLhsScope {
+                                actions.push(linear::Action::BindLhs {
                                     id,
                                     path: child_path_id,
                                 });
@@ -356,7 +355,7 @@ impl<'a> LhsCanonicalizer<'a> {
             Pattern::Variable(Variable { id, .. }) | Pattern::Constant(Constant { id, .. }) => {
                 let (id, is_new) = self.canonicalize_id(id, path);
                 if is_new {
-                    actions.push(linear::Action::AddToLhsScope { id, path });
+                    actions.push(linear::Action::BindLhs { id, path });
                 }
             }
 
@@ -735,11 +734,11 @@ mod tests {
                     },
                     expected: Some(5),
                     actions: vec![
-                        linear::Action::AddToLhsScope {
+                        linear::Action::BindLhs {
                             id: linear::LhsId(0),
                             path: paths.intern(Path::new(&[0, 0])),
                         },
-                        linear::Action::AddToLhsScope {
+                        linear::Action::BindLhs {
                             id: linear::LhsId(1),
                             path: paths.intern(Path::new(&[0, 1])),
                         },
@@ -780,7 +779,7 @@ mod tests {
                 operation: linear::MatchOp::Nop,
                 expected: None,
                 actions: vec![
-                    linear::Action::AddToLhsScope {
+                    linear::Action::BindLhs {
                         id: linear::LhsId(0),
                         path: paths.intern(Path::new(&[0])),
                     },
@@ -802,7 +801,7 @@ mod tests {
                 },
                 expected: Some(1),
                 actions: vec![
-                    linear::Action::AddToLhsScope {
+                    linear::Action::BindLhs {
                         id: linear::LhsId(0),
                         path: paths.intern(Path::new(&[0])),
                     },
@@ -853,7 +852,7 @@ mod tests {
                     },
                     expected: Some(4),
                     actions: vec![
-                        linear::Action::AddToLhsScope {
+                        linear::Action::BindLhs {
                             id: linear::LhsId(0),
                             path: paths.intern(Path::new(&[0, 0])),
                         },
@@ -887,7 +886,7 @@ mod tests {
                     },
                     expected: Some(1),
                     actions: vec![
-                        linear::Action::AddToLhsScope {
+                        linear::Action::BindLhs {
                             id: linear::LhsId(0),
                             path: paths.intern(Path::new(&[0, 0])),
                         },
@@ -902,7 +901,7 @@ mod tests {
                     },
                     expected: Some(1),
                     actions: vec![
-                        linear::Action::AddToLhsScope {
+                        linear::Action::BindLhs {
                             id: linear::LhsId(1),
                             path: paths.intern(Path::new(&[0, 1, 1])),
                         },

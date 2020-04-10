@@ -117,7 +117,7 @@ pub struct RhsId(pub u32);
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Action {
     /// Bind `id = path` in the left-hand side scope.
-    AddToLhsScope {
+    BindLhs {
         /// The canonicalized id being bound.
         id: LhsId,
         /// The path to the instruction or value.
