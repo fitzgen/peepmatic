@@ -30,21 +30,21 @@ pub trait DotFmt<TAlphabet, TState, TOutput> {
     /// This will be inside an [HTML
     /// label](https://www.graphviz.org/doc/info/shapes.html#html), so you may
     /// use balanced HTML tags.
-    fn fmt_alphabet(w: &mut impl Write, character: &TAlphabet) -> io::Result<()>;
+    fn fmt_alphabet(&self, w: &mut impl Write, character: &TAlphabet) -> io::Result<()>;
 
     /// Format the custom data associated with a state.
     ///
     /// This will be inside an [HTML
     /// label](https://www.graphviz.org/doc/info/shapes.html#html), so you may
     /// use balanced HTML tags.
-    fn fmt_state(w: &mut impl Write, state: &TState) -> io::Result<()>;
+    fn fmt_state(&self, w: &mut impl Write, state: &TState) -> io::Result<()>;
 
     /// Format a transition's output or the final output of a final state.
     ///
     /// This will be inside an [HTML
     /// label](https://www.graphviz.org/doc/info/shapes.html#html), so you may
     /// use balanced HTML tags.
-    fn fmt_output(w: &mut impl Write, output: &TOutput) -> io::Result<()>;
+    fn fmt_output(&self, w: &mut impl Write, output: &TOutput) -> io::Result<()>;
 }
 
 impl<TAlphabet, TState, TOutput> Automata<TAlphabet, TState, TOutput>
@@ -57,34 +57,37 @@ where
     /// Dot](https://graphviz.gitlab.io/_pages/pdf/dotguide.pdf) file at the
     /// given path.
     ///
-    /// The `D` type parameter controls how `TAlphabet`, `TState`, and `TOutput`
-    /// are rendered. See the [`DotFmt`][crate::dot::DotFmt] trait for details.
+    /// The `formatter` parameter controls how `TAlphabet`, `TState`, and
+    /// `TOutput` are rendered. See the [`DotFmt`][crate::dot::DotFmt] trait for
+    /// details.
     ///
     /// **This method only exists when the `"dot"` cargo feature is enabled.**
-    pub fn write_dot_file<D, P>(&self, path: P) -> io::Result<()>
-    where
-        D: DotFmt<TAlphabet, TState, TOutput>,
-        P: AsRef<Path>,
-    {
-        let mut file = fs::File::open(path)?;
-        self.write_dot::<D, _>(&mut file)?;
+    pub fn write_dot_file(
+        &self,
+        formatter: &impl DotFmt<TAlphabet, TState, TOutput>,
+        path: impl AsRef<Path>,
+    ) -> io::Result<()> {
+        let mut file = fs::File::create(path)?;
+        self.write_dot(formatter, &mut file)?;
         Ok(())
     }
 
     /// Write this `Automata` out to the given write-able as a [GraphViz
     /// Dot](https://graphviz.gitlab.io/_pages/pdf/dotguide.pdf) file.
     ///
-    /// The `D` type parameter controls how `TAlphabet`, `TState`, and `TOutput`
-    /// are rendered. See the [`DotFmt`][crate::dot::DotFmt] trait for details.
+    /// The `formatter` parameter controls how `TAlphabet`, `TState`, and
+    /// `TOutput` are rendered. See the [`DotFmt`][crate::dot::DotFmt] trait for
+    /// details.
     ///
     /// **This method only exists when the `"dot"` cargo feature is enabled.**
-    pub fn write_dot<D, W>(&self, w: &mut W) -> io::Result<()>
-    where
-        D: DotFmt<TAlphabet, TState, TOutput>,
-        W: Write,
-    {
+    pub fn write_dot(
+        &self,
+        formatter: &impl DotFmt<TAlphabet, TState, TOutput>,
+        w: &mut impl Write,
+    ) -> io::Result<()> {
         writeln!(w, "digraph {{")?;
         writeln!(w, "  rankdir = \"LR\";")?;
+        writeln!(w, "  nodesep = 2;")?;
 
         // Fake state for the incoming arrow to the start state.
         writeln!(w, "  \"\" [shape = none];")?;
@@ -93,7 +96,7 @@ where
         for (i, state_data) in self.state_data.iter().enumerate() {
             write!(
                 w,
-                r#"  state_{i} [shape = {shape}, label = <<table border="0"><tr><td colspan="2">{i}</td></tr><tr><td>State data:</td><td>"#,
+                r#"  state_{i} [shape = {shape}, label = <<table border="0"><tr><td cellpadding="5">{i}</td></tr><tr><td cellpadding="5">"#,
                 i = i,
                 shape = if self.final_states.contains_key(&State(i as u32)) {
                     "doublecircle"
@@ -102,14 +105,14 @@ where
                 }
             )?;
             if let Some(state_data) = state_data {
-                D::fmt_state(w, state_data)?;
+                formatter.fmt_state(w, state_data)?;
             } else {
-                write!(w, "(none)")?;
+                write!(w, "(no state data)")?;
             }
             write!(w, "</td></tr>")?;
             if let Some(final_output) = self.final_states.get(&State(i as u32)) {
-                write!(w, "<tr><td>Final Output:</td><td>")?;
-                D::fmt_output(w, final_output)?;
+                write!(w, r#"<tr><td cellpadding="5" align="left">"#)?;
+                formatter.fmt_output(w, final_output)?;
                 write!(w, "</td></tr>")?;
             }
             writeln!(w, "</table>>];")?;
@@ -123,13 +126,13 @@ where
             for (input, (to, output)) in transitions {
                 write!(
                     w,
-                    r#"  state_{from} -> state_{to} [label = <<table border="0"><tr><td>Input:</td><td>"#,
+                    r#"  state_{from} -> state_{to} [label = <<table border="0"><tr><td cellpadding="5" align="left">Input:</td><td cellpadding="5" align="left">"#,
                     from = from,
                     to = to.0,
                 )?;
-                D::fmt_alphabet(w, input)?;
-                write!(w, r#"</td></tr><tr><td>Output:</td><td>"#,)?;
-                D::fmt_output(w, output)?;
+                formatter.fmt_alphabet(w, input)?;
+                write!(w, r#"</td></tr><tr><td cellpadding="5" align="left">Output:</td><td cellpadding="5" align="left">"#,)?;
+                formatter.fmt_output(w, output)?;
                 writeln!(w, "</td></tr></table>>];")?;
             }
         }
@@ -150,15 +153,15 @@ where
     TState: Debug,
     TOutput: Debug,
 {
-    fn fmt_alphabet(w: &mut impl Write, alphabet: &TAlphabet) -> io::Result<()> {
+    fn fmt_alphabet(&self, w: &mut impl Write, alphabet: &TAlphabet) -> io::Result<()> {
         write!(w, r#"<font face="monospace">{:?}</font>"#, alphabet)
     }
 
-    fn fmt_state(w: &mut impl Write, state: &TState) -> io::Result<()> {
+    fn fmt_state(&self, w: &mut impl Write, state: &TState) -> io::Result<()> {
         write!(w, r#"<font face="monospace">{:?}</font>"#, state)
     }
 
-    fn fmt_output(w: &mut impl Write, output: &TOutput) -> io::Result<()> {
+    fn fmt_output(&self, w: &mut impl Write, output: &TOutput) -> io::Result<()> {
         write!(w, r#"<font face="monospace">{:?}</font>"#, output)
     }
 }
@@ -174,15 +177,15 @@ where
     TState: Display,
     TOutput: Display,
 {
-    fn fmt_alphabet(w: &mut impl Write, alphabet: &TAlphabet) -> io::Result<()> {
+    fn fmt_alphabet(&self, w: &mut impl Write, alphabet: &TAlphabet) -> io::Result<()> {
         write!(w, "{}", alphabet)
     }
 
-    fn fmt_state(w: &mut impl Write, state: &TState) -> io::Result<()> {
+    fn fmt_state(&self, w: &mut impl Write, state: &TState) -> io::Result<()> {
         write!(w, "{}", state)
     }
 
-    fn fmt_output(w: &mut impl Write, output: &TOutput) -> io::Result<()> {
+    fn fmt_output(&self, w: &mut impl Write, output: &TOutput) -> io::Result<()> {
         write!(w, "{}", output)
     }
 }
@@ -216,26 +219,27 @@ mod tests {
         let expected = r#"
 digraph {
   rankdir = "LR";
+  nodesep = 2;
   "" [shape = none];
-  state_0 [shape = doublecircle, label = <<table border="0"><tr><td colspan="2">0</td></tr><tr><td>State data:</td><td>(none)</td></tr><tr><td>Final Output:</td><td><font face="monospace">0</font></td></tr></table>>];
-  state_1 [shape = circle, label = <<table border="0"><tr><td colspan="2">1</td></tr><tr><td>State data:</td><td>(none)</td></tr></table>>];
-  state_2 [shape = circle, label = <<table border="0"><tr><td colspan="2">2</td></tr><tr><td>State data:</td><td>(none)</td></tr></table>>];
-  state_3 [shape = circle, label = <<table border="0"><tr><td colspan="2">3</td></tr><tr><td>State data:</td><td>(none)</td></tr></table>>];
-  state_4 [shape = circle, label = <<table border="0"><tr><td colspan="2">4</td></tr><tr><td>State data:</td><td>(none)</td></tr></table>>];
-  state_5 [shape = circle, label = <<table border="0"><tr><td colspan="2">5</td></tr><tr><td>State data:</td><td>(none)</td></tr></table>>];
+  state_0 [shape = doublecircle, label = <<table border="0"><tr><td cellpadding="5">0</td></tr><tr><td cellpadding="5">(no state data)</td></tr><tr><td cellpadding="5" align="left"><font face="monospace">0</font></td></tr></table>>];
+  state_1 [shape = circle, label = <<table border="0"><tr><td cellpadding="5">1</td></tr><tr><td cellpadding="5">(no state data)</td></tr></table>>];
+  state_2 [shape = circle, label = <<table border="0"><tr><td cellpadding="5">2</td></tr><tr><td cellpadding="5">(no state data)</td></tr></table>>];
+  state_3 [shape = circle, label = <<table border="0"><tr><td cellpadding="5">3</td></tr><tr><td cellpadding="5">(no state data)</td></tr></table>>];
+  state_4 [shape = circle, label = <<table border="0"><tr><td cellpadding="5">4</td></tr><tr><td cellpadding="5">(no state data)</td></tr></table>>];
+  state_5 [shape = circle, label = <<table border="0"><tr><td cellpadding="5">5</td></tr><tr><td cellpadding="5">(no state data)</td></tr></table>>];
   "" -> state_5;
-  state_1 -> state_0 [label = <<table border="0"><tr><td>Input:</td><td><font face="monospace">'n'</font></td></tr><tr><td>Output:</td><td><font face="monospace">0</font></td></tr></table>>];
-  state_2 -> state_1 [label = <<table border="0"><tr><td>Input:</td><td><font face="monospace">'o'</font></td></tr><tr><td>Output:</td><td><font face="monospace">0</font></td></tr></table>>];
-  state_3 -> state_0 [label = <<table border="0"><tr><td>Input:</td><td><font face="monospace">'t'</font></td></tr><tr><td>Output:</td><td><font face="monospace">0</font></td></tr></table>>];
-  state_4 -> state_3 [label = <<table border="0"><tr><td>Input:</td><td><font face="monospace">'a'</font></td></tr><tr><td>Output:</td><td><font face="monospace">6</font></td></tr></table>>];
-  state_4 -> state_1 [label = <<table border="0"><tr><td>Input:</td><td><font face="monospace">'u'</font></td></tr><tr><td>Output:</td><td><font face="monospace">0</font></td></tr></table>>];
-  state_5 -> state_2 [label = <<table border="0"><tr><td>Input:</td><td><font face="monospace">'m'</font></td></tr><tr><td>Output:</td><td><font face="monospace">1</font></td></tr></table>>];
-  state_5 -> state_4 [label = <<table border="0"><tr><td>Input:</td><td><font face="monospace">'s'</font></td></tr><tr><td>Output:</td><td><font face="monospace">0</font></td></tr></table>>];
+  state_1 -> state_0 [label = <<table border="0"><tr><td cellpadding="5" align="left">Input:</td><td cellpadding="5" align="left"><font face="monospace">'n'</font></td></tr><tr><td cellpadding="5" align="left">Output:</td><td cellpadding="5" align="left"><font face="monospace">0</font></td></tr></table>>];
+  state_2 -> state_1 [label = <<table border="0"><tr><td cellpadding="5" align="left">Input:</td><td cellpadding="5" align="left"><font face="monospace">'o'</font></td></tr><tr><td cellpadding="5" align="left">Output:</td><td cellpadding="5" align="left"><font face="monospace">0</font></td></tr></table>>];
+  state_3 -> state_0 [label = <<table border="0"><tr><td cellpadding="5" align="left">Input:</td><td cellpadding="5" align="left"><font face="monospace">'t'</font></td></tr><tr><td cellpadding="5" align="left">Output:</td><td cellpadding="5" align="left"><font face="monospace">0</font></td></tr></table>>];
+  state_4 -> state_3 [label = <<table border="0"><tr><td cellpadding="5" align="left">Input:</td><td cellpadding="5" align="left"><font face="monospace">'a'</font></td></tr><tr><td cellpadding="5" align="left">Output:</td><td cellpadding="5" align="left"><font face="monospace">6</font></td></tr></table>>];
+  state_4 -> state_1 [label = <<table border="0"><tr><td cellpadding="5" align="left">Input:</td><td cellpadding="5" align="left"><font face="monospace">'u'</font></td></tr><tr><td cellpadding="5" align="left">Output:</td><td cellpadding="5" align="left"><font face="monospace">0</font></td></tr></table>>];
+  state_5 -> state_2 [label = <<table border="0"><tr><td cellpadding="5" align="left">Input:</td><td cellpadding="5" align="left"><font face="monospace">'m'</font></td></tr><tr><td cellpadding="5" align="left">Output:</td><td cellpadding="5" align="left"><font face="monospace">1</font></td></tr></table>>];
+  state_5 -> state_4 [label = <<table border="0"><tr><td cellpadding="5" align="left">Input:</td><td cellpadding="5" align="left"><font face="monospace">'s'</font></td></tr><tr><td cellpadding="5" align="left">Output:</td><td cellpadding="5" align="left"><font face="monospace">0</font></td></tr></table>>];
 }
 "#;
 
         let mut buf = vec![];
-        automata.write_dot::<DebugDotFmt, _>(&mut buf).unwrap();
+        automata.write_dot(&DebugDotFmt, &mut buf).unwrap();
         let actual = String::from_utf8(buf).unwrap();
         eprintln!("{}", actual);
         assert_eq!(expected.trim(), actual.trim());
