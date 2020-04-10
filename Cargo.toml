@@ -13,10 +13,9 @@ peepmatic-macro = { version = "0.1.0", path = "crates/macro" }
 peepmatic-runtime = { version = "0.1.0", path = "crates/runtime" }
 wast = "13.0.0"
 
-# Waiting on https://github.com/prove-rs/z3.rs/pull/71 to merge.
+# Waiting on a new release.
 [dependencies.z3]
-git = "https://github.com/fitzgen/z3.rs.git"
-branch = "add-get-unsat-core-and-other-small-fixups"
+git = "https://github.com/prove-rs/z3.rs.git"
 features = ["static-link-z3"]
 
 [workspace]
