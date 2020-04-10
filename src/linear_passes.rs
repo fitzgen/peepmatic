@@ -126,7 +126,7 @@ fn compare_paths(paths: &PathInterner, a: PathId, b: PathId) -> Ordering {
 }
 
 /// Are the given optimizations sorted from least to most general?
-fn is_sorted(opts: &linear::Optimizations) -> bool {
+pub(crate) fn is_sorted(opts: &linear::Optimizations) -> bool {
     for window in opts.optimizations.windows(2) {
         match compare_optimization_generality(&opts.paths, &window[0], &window[1]) {
             Ordering::Less | Ordering::Equal => continue,

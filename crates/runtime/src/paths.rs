@@ -45,7 +45,7 @@ impl Path<'_> {
 }
 
 /// An identifier for an interned path.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct PathId(u32);
 
 /// An interner and de-duplicator for `Path`s.

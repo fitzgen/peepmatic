@@ -11,9 +11,12 @@ the set of optimizations into an efficient peephole optimizer.
 #![deny(missing_debug_implementations)]
 
 mod ast;
+mod automatize;
 mod linear_passes;
 mod linearize;
 mod parser;
 mod traversals;
 mod verify;
-pub use self::{ast::*, linear_passes::*, linearize::*, parser::*, traversals::*, verify::*};
+pub use self::{
+    ast::*, automatize::*, linear_passes::*, linearize::*, parser::*, traversals::*, verify::*,
+};

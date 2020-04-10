@@ -48,7 +48,7 @@ pub struct Increment {
 
 /// A matching operation to be performed on some Cranelift instruction as part
 /// of determining whether an optimization is applicable.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Deserialize, Serialize)]
 pub enum MatchOp {
     /// Switch on the opcode of an instruction.
     Opcode {
@@ -106,15 +106,15 @@ pub enum MatchOp {
 
 /// A canonicalized identifier for a left-hand side value that was bound in a
 /// pattern.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct LhsId(pub u32);
 
 /// A canonicalized identifier for a right-hand side value.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct RhsId(pub u32);
 
 /// An action to perform when transitioning between states in the automata.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Action {
     /// Bind `id = path` in the left-hand side scope.
     BindLhs {
