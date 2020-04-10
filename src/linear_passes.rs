@@ -10,7 +10,7 @@ use std::cmp::Ordering;
 ///
 /// This helps us ensure that we always match the least-general (aka
 /// most-specific) optimization that we can for a particular instruction
-/// sequence.
+/// sequence, and insert fallback paths when we can't.
 ///
 /// For example, if we have both of these optimizations:
 ///
@@ -36,10 +36,25 @@ pub fn sort_least_to_most_general(opts: &mut linear::Optimizations) {
     optimizations.sort_by(|a, b| compare_optimization_generality(paths, a, b));
 }
 
-fn compare_optimization_generality(
+/// Sort the linear optimizations lexicographically.
+///
+/// This sort order is required for automata construction.
+pub fn sort_lexicographically(opts: &mut linear::Optimizations) {
+    let linear::Optimizations {
+        ref mut optimizations,
+        ref paths,
+    } = opts;
+
+    // NB: we *cannot* use an unstable sort here, same as above.
+    optimizations
+        .sort_by(|a, b| compare_optimizations(paths, a, b, |a_len, b_len| a_len.cmp(&b_len)));
+}
+
+fn compare_optimizations(
     paths: &PathInterner,
     a: &linear::Optimization,
     b: &linear::Optimization,
+    compare_lengths: impl Fn(usize, usize) -> Ordering,
 ) -> Ordering {
     for (a, b) in a.increments.iter().zip(b.increments.iter()) {
         let c = compare_match_op_generality(paths, a.operation, b.operation);
@@ -53,9 +68,19 @@ fn compare_optimization_generality(
         }
     }
 
-    // If they shared equivalent prefixes, then compare lengths and invert the
-    // result because longer patterns are less general than shorter patterns.
-    a.increments.len().cmp(&b.increments.len()).reverse()
+    compare_lengths(a.increments.len(), b.increments.len())
+}
+
+fn compare_optimization_generality(
+    paths: &PathInterner,
+    a: &linear::Optimization,
+    b: &linear::Optimization,
+) -> Ordering {
+    compare_optimizations(paths, a, b, |a_len, b_len| {
+        // If they shared equivalent prefixes, then compare lengths and invert the
+        // result because longer patterns are less general than shorter patterns.
+        a_len.cmp(&b_len).reverse()
+    })
 }
 
 fn compare_match_op_generality(
@@ -126,9 +151,22 @@ fn compare_paths(paths: &PathInterner, a: PathId, b: PathId) -> Ordering {
 }
 
 /// Are the given optimizations sorted from least to most general?
-pub(crate) fn is_sorted(opts: &linear::Optimizations) -> bool {
+pub(crate) fn is_sorted_by_generality(opts: &linear::Optimizations) -> bool {
     for window in opts.optimizations.windows(2) {
         match compare_optimization_generality(&opts.paths, &window[0], &window[1]) {
+            Ordering::Less | Ordering::Equal => continue,
+            Ordering::Greater => return false,
+        }
+    }
+    true
+}
+
+/// Are the given optimizations sorted lexicographically?
+pub(crate) fn is_sorted_lexicographically(opts: &linear::Optimizations) -> bool {
+    for window in opts.optimizations.windows(2) {
+        match compare_optimizations(&opts.paths, &window[0], &window[1], |a_len, b_len| {
+            a_len.cmp(&b_len)
+        }) {
             Ordering::Less | Ordering::Equal => continue,
             Ordering::Greater => return false,
         }
@@ -190,7 +228,7 @@ pub(crate) fn is_sorted(opts: &linear::Optimizations) -> bool {
 /// The optimizations must already be sorted least-to-most general before
 /// running this pass.
 pub fn insert_fallback_optimizations(opts: &mut linear::Optimizations) {
-    debug_assert!(is_sorted(opts));
+    debug_assert!(is_sorted_by_generality(opts));
     assert!(!opts.optimizations.is_empty());
 
     let mut new_opts = vec![opts.optimizations[0].clone()];
@@ -259,10 +297,6 @@ pub fn insert_fallback_optimizations(opts: &mut linear::Optimizations) {
     }
 
     opts.optimizations = new_opts;
-
-    // Re-sort to ensure that our new fallback optimizations and their edges are
-    // still sorted for automata construction.
-    sort_least_to_most_general(opts);
 }
 
 /// Ensure that we emit match operations in a consistent order.
@@ -301,7 +335,7 @@ pub fn insert_fallback_optimizations(opts: &mut linear::Optimizations) {
 /// opcode @ 0 --(else)--> is-const? @ 0 --true-->
 /// ```
 pub fn match_in_same_order(opts: &mut linear::Optimizations) {
-    debug_assert!(is_sorted(opts));
+    debug_assert!(is_sorted_by_generality(opts));
     assert!(!opts.optimizations.is_empty());
 
     let mut prefix = vec![];
@@ -350,7 +384,7 @@ pub fn match_in_same_order(opts: &mut linear::Optimizations) {
     }
 
     // Should still be sorted after this pass.
-    debug_assert!(is_sorted(&opts));
+    debug_assert!(is_sorted_by_generality(&opts));
 }
 
 #[cfg(test)]

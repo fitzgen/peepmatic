@@ -7,7 +7,7 @@ use peepmatic_runtime::linear;
 pub fn automatize(
     opts: &linear::Optimizations,
 ) -> Automata<Option<u32>, linear::MatchOp, Vec<linear::Action>> {
-    debug_assert!(crate::linear_passes::is_sorted(opts));
+    debug_assert!(crate::linear_passes::is_sorted_lexicographically(opts));
 
     let mut builder = Builder::<Option<u32>, linear::MatchOp, Vec<linear::Action>>::new();
 

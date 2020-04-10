@@ -46,4 +46,13 @@ mod tests {
             (=> (bor (bor $x $z) $y) $x)
         ");
     }
+
+    #[test]
+    fn regression_1() {
+        compile(b"
+            (=> (bor (bor $x $y) 0) $x)
+            (=> (bor $x 0) $x)
+            (=> (bor $y $x) $x)
+        ");
+    }
 }
