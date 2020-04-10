@@ -13,10 +13,11 @@
 //! implemented yet.
 
 use crate::ast::{Span as _, *};
-use crate::traversals::Dfs;
+use crate::traversals::{Dfs, TraversalEvent};
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::fmt;
+use std::hash::Hash;
 use std::iter;
 use std::ops::{Deref, DerefMut};
 use std::path::Path;
@@ -88,11 +89,102 @@ pub type VerifyResult<T> = Result<T, VerifyError>;
 
 /// Verify and type check a set of optimizations.
 pub fn verify(opts: &Optimizations) -> VerifyResult<()> {
+    if opts.optimizations.is_empty() {
+        return Err(anyhow::anyhow!("no optimizations").into());
+    }
+
+    verify_unique_left_hand_sides(opts)?;
+
     let z3 = &z3::Context::new(&z3::Config::new());
-    for opt in opts.optimizations.iter() {
+    for opt in &opts.optimizations {
         verify_optimization(z3, opt)?;
     }
     Ok(())
+}
+
+/// Check that every LHS in the given optimizations is unique.
+///
+/// If there were duplicates, then it would be nondeterministic which one we
+/// applied and would make automata construction more difficult. It is better to
+/// check for duplicates and reject them if found.
+fn verify_unique_left_hand_sides(opts: &Optimizations) -> VerifyResult<()> {
+    let mut lefts = HashMap::new();
+    for opt in &opts.optimizations {
+        let canon_lhs = canonicalized_lhs_key(&opt.lhs);
+        let existing = lefts.insert(canon_lhs, opt.lhs.span());
+        if let Some(span) = existing {
+            return Err(VerifyError {
+                errors: vec![
+                    anyhow::anyhow!("error: two optimizations cannot have the same left-hand side"),
+                    WastError::new(span, "note: first use of this left-hand side".into()).into(),
+                    WastError::new(
+                        opt.lhs.span(),
+                        "note: second use of this left-hand side".into(),
+                    )
+                    .into(),
+                ],
+            });
+        }
+    }
+    Ok(())
+}
+
+/// When checking for duplicate left-hand sides, we need to consider patterns
+/// that are duplicates up to renaming identifiers. For example, these LHSes
+/// should be considered duplicates of each other:
+///
+/// ```lisp
+/// (=> (iadd $x $y) ...)
+/// (=> (iadd $a $b) ...)
+/// ```
+///
+/// This function creates an opaque, canonicalized hash key for left-hand sides
+/// that sees through identifier renaming.
+fn canonicalized_lhs_key(lhs: &Lhs) -> impl Hash + Eq {
+    let mut var_to_canon = HashMap::new();
+    let mut const_to_canon = HashMap::new();
+    let mut canonicalized = vec![];
+
+    for (event, ast) in Dfs::new(lhs) {
+        if event != TraversalEvent::Enter {
+            continue;
+        }
+        use CanonicalBit::*;
+        canonicalized.push(match ast {
+            DynAstRef::Lhs(_) => Other("Lhs"),
+            DynAstRef::Pattern(_) => Other("Pattern"),
+            DynAstRef::ValueLiteral(_) => Other("ValueLiteral"),
+            DynAstRef::Integer(i) => Integer(i.value),
+            DynAstRef::Boolean(b) => Boolean(b.value),
+            DynAstRef::PatternOperation(o) => Operation(o.operator),
+            DynAstRef::Precondition(p) => Precondition(p.constraint),
+            DynAstRef::ConstraintOperand(_) => Other("ConstraintOperand"),
+            DynAstRef::Variable(Variable { id, .. }) => {
+                let new_id = var_to_canon.len() as u32;
+                let canon_id = var_to_canon.entry(id).or_insert(new_id);
+                Var(*canon_id)
+            }
+            DynAstRef::Constant(Constant { id, .. }) => {
+                let new_id = const_to_canon.len() as u32;
+                let canon_id = const_to_canon.entry(id).or_insert(new_id);
+                Const(*canon_id)
+            }
+            other => unreachable!("unreachable ast node: {:?}", other),
+        });
+    }
+
+    return canonicalized;
+
+    #[derive(Hash, PartialEq, Eq)]
+    enum CanonicalBit {
+        Var(u32),
+        Const(u32),
+        Integer(i128),
+        Boolean(bool),
+        Operation(Operator),
+        Precondition(Constraint),
+        Other(&'static str),
+    }
 }
 
 pub(crate) struct TypingContext<'a> {
@@ -795,4 +887,50 @@ mod tests {
     verify_ok!(rhs_0, "(=> $x (iadd $x (iconst 0)))");
     verify_err!(rhs_1, "(=> $x (iadd $x))");
     verify_err!(rhs_2, "(=> $x (iadd $x 0 0))");
+
+    verify_err!(no_optimizations, "");
+
+    verify_err!(
+        duplicate_left_hand_sides,
+        "
+(=> (iadd $x $y) 0)
+(=> (iadd $x $y) 1)
+"
+    );
+    verify_err!(
+        canonically_duplicate_left_hand_sides_0,
+        "
+(=> (iadd $x $y) 0)
+(=> (iadd $y $x) 1)
+"
+    );
+    verify_err!(
+        canonically_duplicate_left_hand_sides_1,
+        "
+(=> (iadd $X $Y) 0)
+(=> (iadd $Y $X) 1)
+"
+    );
+    verify_err!(
+        canonically_duplicate_left_hand_sides_2,
+        "
+(=> (iadd $x $x) 0)
+(=> (iadd $y $y) 1)
+"
+    );
+
+    verify_ok!(
+        canonically_different_left_hand_sides_0,
+        "
+(=> (iadd $x $C) 0)
+(=> (iadd $C $x) 1)
+"
+    );
+    verify_ok!(
+        canonically_different_left_hand_sides_1,
+        "
+(=> (iadd $x $x) 0)
+(=> (iadd $x $y) 1)
+"
+    );
 }

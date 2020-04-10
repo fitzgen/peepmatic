@@ -326,7 +326,7 @@ impl<'a> From<&'a Operation<'a, Rhs<'a>>> for DynAstRef<'a> {
 ///
 /// These are a subset of Cranelift IR's operators.
 #[peepmatic_macro::peepmatic]
-#[derive(Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum Operator {
     /// `ashr`
     #[peepmatic(params(iNN, iNN), result(iNN))]
@@ -379,7 +379,7 @@ pub struct Precondition<'a> {
 }
 
 /// Contraint operators.
-#[derive(Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum Constraint {
     /// Is the operand a power of two?
     IsPowerOfTwo,
