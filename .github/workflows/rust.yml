@@ -47,3 +47,14 @@ jobs:
       run: cargo fuzz build parser -Oa --sanitizer=none
     - name: Run parser fuzz target
       run: cargo fuzz run parser -Oa --sanitizer=none -- -max_total_time=300
+
+  fuzz_compile:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: Install cargo fuzz
+      run: cargo install cargo-fuzz
+    - name: Build fuzz target
+      run: cargo fuzz build compile -Oa --sanitizer=none
+    - name: Run compile fuzz target
+      run: cargo fuzz run compile -Oa --sanitizer=none -- -max_total_time=300
