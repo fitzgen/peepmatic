@@ -221,7 +221,9 @@ pub fn insert_fallback_optimizations(opts: &mut linear::Optimizations) {
         // When the divergence is only in the expected result, not in the
         // matching operation, then we don't need to insert any fallback
         // optimizations.
-        if last_opt.increments[i].operation == this_opt.increments[i].operation {
+        if i < this_opt.increments.len()
+            && last_opt.increments[i].operation == this_opt.increments[i].operation
+        {
             assert!(last_opt.increments[i].expected != this_opt.increments[i].expected);
             new_opts.push(this_opt.clone());
             continue;

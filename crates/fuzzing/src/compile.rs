@@ -38,4 +38,12 @@ mod tests {
     fn check_compile() {
         crate::check(|s: String| compile(s.as_bytes()));
     }
+
+    #[test]
+    fn regression_0() {
+        compile(b"
+            (=> (bor (bor $x $y) $y) $x)
+            (=> (bor (bor $x $z) $y) $x)
+        ");
+    }
 }
