@@ -64,6 +64,7 @@ mod tok {
     custom_keyword!(iadd_imm);
     custom_keyword!(iconst);
     custom_keyword!(imul);
+    custom_keyword!(imul_imm);
     custom_keyword!(ishl);
     custom_keyword!(isub);
     custom_keyword!(is_power_of_two = "is-power-of-two");
@@ -376,6 +377,10 @@ impl<'a> Parse<'a> for Operator {
         if p.peek::<tok::imul>() {
             p.parse::<tok::imul>()?;
             return Ok(Operator::Imul);
+        }
+        if p.peek::<tok::imul_imm>() {
+            p.parse::<tok::imul_imm>()?;
+            return Ok(Operator::ImulImm);
         }
         if p.peek::<tok::ishl>() {
             p.parse::<tok::ishl>()?;

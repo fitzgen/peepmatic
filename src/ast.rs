@@ -352,6 +352,10 @@ pub enum Operator {
     #[peepmatic(params(iNN, iNN), result(iNN))]
     Imul,
 
+    /// `imul_imm`
+    #[peepmatic(immediates(iNN), params(iNN), result(iNN))]
+    ImulImm,
+
     /// `ishl`
     #[peepmatic(params(iNN, iNN), result(iNN))]
     Ishl,

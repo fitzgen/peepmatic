@@ -189,6 +189,13 @@ pub enum Action {
         operands: [RhsId; 2],
     },
 
+    /// Implicitly define the n^th RHS instruction by making an `imul_imm`.
+    MakeImulImm {
+        /// The right-hand side operands for this `imul`. The first must be a
+        /// constant value.
+        operands: [RhsId; 2],
+    },
+
     /// Implicitly define the n^th RHS instruction by making an `ishl`.
     MakeIshl {
         /// The right-hand side operands for this `ishl`.

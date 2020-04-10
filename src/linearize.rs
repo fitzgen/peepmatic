@@ -526,6 +526,12 @@ impl<'a> RhsBuilder<'a> {
                         self.get_rhs_id(&op.operands[1]),
                     ],
                 },
+                Operator::ImulImm => linear::Action::MakeImulImm {
+                    operands: [
+                        self.get_rhs_id(&op.operands[0]),
+                        self.get_rhs_id(&op.operands[1]),
+                    ],
+                },
                 Operator::Ishl => linear::Action::MakeIshl {
                     operands: [
                         self.get_rhs_id(&op.operands[0]),
@@ -661,8 +667,9 @@ impl Pattern<'_> {
                     Operator::IaddImm => 3,
                     Operator::Iconst => 4,
                     Operator::Imul => 5,
-                    Operator::Ishl => 6,
-                    Operator::Sshr => 7,
+                    Operator::ImulImm => 6,
+                    Operator::Ishl => 7,
+                    Operator::Sshr => 8,
                 }),
             ),
         }
