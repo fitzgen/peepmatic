@@ -19,6 +19,7 @@
 
 pub mod integer_interner;
 pub mod linear;
+pub mod operator;
 pub mod paths;
 
 use peepmatic_automata::Automata;

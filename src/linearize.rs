@@ -99,6 +99,7 @@ use crate::traversals::Dfs;
 use peepmatic_runtime::{
     integer_interner::IntegerInterner,
     linear,
+    operator::Operator,
     paths::{Path, PathId, PathInterner},
 };
 use std::collections::BTreeMap;
@@ -501,58 +502,19 @@ impl<'a> RhsBuilder<'a> {
                     linear::Action::Log2 { operand }
                 }
             },
-            Rhs::Operation(op) => match op.operator {
-                Operator::Ashr => linear::Action::MakeAshr {
-                    operands: [
-                        self.get_rhs_id(&op.operands[0]),
-                        self.get_rhs_id(&op.operands[1]),
-                    ],
-                },
-                Operator::Bor => linear::Action::MakeBor {
-                    operands: [
-                        self.get_rhs_id(&op.operands[0]),
-                        self.get_rhs_id(&op.operands[1]),
-                    ],
-                },
-                Operator::Iadd => linear::Action::MakeIadd {
-                    operands: [
-                        self.get_rhs_id(&op.operands[0]),
-                        self.get_rhs_id(&op.operands[1]),
-                    ],
-                },
-                Operator::IaddImm => linear::Action::MakeIaddImm {
-                    operands: [
-                        self.get_rhs_id(&op.operands[0]),
-                        self.get_rhs_id(&op.operands[1]),
-                    ],
-                },
-                Operator::Iconst => linear::Action::MakeIconst {
+            Rhs::Operation(op) => match op.operands.len() {
+                1 => linear::Action::MakeUnaryInst {
+                    operator: op.operator,
                     operand: self.get_rhs_id(&op.operands[0]),
                 },
-                Operator::Imul => linear::Action::MakeImul {
+                2 => linear::Action::MakeBinaryInst {
+                    operator: op.operator,
                     operands: [
                         self.get_rhs_id(&op.operands[0]),
                         self.get_rhs_id(&op.operands[1]),
                     ],
                 },
-                Operator::ImulImm => linear::Action::MakeImulImm {
-                    operands: [
-                        self.get_rhs_id(&op.operands[0]),
-                        self.get_rhs_id(&op.operands[1]),
-                    ],
-                },
-                Operator::Ishl => linear::Action::MakeIshl {
-                    operands: [
-                        self.get_rhs_id(&op.operands[0]),
-                        self.get_rhs_id(&op.operands[1]),
-                    ],
-                },
-                Operator::Sshr => linear::Action::MakeSshr {
-                    operands: [
-                        self.get_rhs_id(&op.operands[0]),
-                        self.get_rhs_id(&op.operands[1]),
-                    ],
-                },
+                n => unreachable!("no instructions of arity {}", n),
             },
         }
     }
@@ -621,7 +583,7 @@ impl Precondition<'_> {
             Constraint::FitsInNativeWord => {
                 let id = match &self.operands[0] {
                     ConstraintOperand::Constant(Constant { id, .. })
-                        | ConstraintOperand::Variable(Variable { id, .. }) => id,
+                    | ConstraintOperand::Variable(Variable { id, .. }) => id,
                     _ => unreachable!("checked in verification"),
                 };
                 let id = lhs_canonicalizer.get(&id);
@@ -779,7 +741,8 @@ mod tests {
                             linear::Action::GetLhsBinding {
                                 id: linear::LhsId(1),
                             },
-                            linear::Action::MakeIshl {
+                            linear::Action::MakeBinaryInst {
+                                operator: Operator::Ishl,
                                 operands: [linear::RhsId(0), linear::RhsId(1)],
                             },
                         ],
@@ -890,7 +853,8 @@ mod tests {
                             linear::Action::GetLhsBinding {
                                 id: linear::LhsId(0),
                             },
-                            linear::Action::MakeIconst {
+                            linear::Action::MakeUnaryInst {
+                                operator: Operator::Iconst,
                                 operand: linear::RhsId(0),
                             },
                         ],
@@ -935,7 +899,8 @@ mod tests {
                             linear::Action::GetLhsBinding {
                                 id: linear::LhsId(1),
                             },
-                            linear::Action::MakeBor {
+                            linear::Action::MakeBinaryInst {
+                                operator: Operator::Bor,
                                 operands: [linear::RhsId(0), linear::RhsId(1)],
                             },
                         ],

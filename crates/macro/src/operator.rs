@@ -7,7 +7,7 @@ use syn::DeriveInput;
 use syn::Error;
 use syn::{parse_macro_input, Result};
 
-pub fn peepmatic(input: TokenStream) -> TokenStream {
+pub fn derive_operator(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
 
     assert_eq!(input.ident.to_string(), "Operator");
@@ -19,7 +19,6 @@ pub fn peepmatic(input: TokenStream) -> TokenStream {
 
     let num_operators = variants.len();
 
-    let operator = create_enum_operator(&input.attrs, &variants);
     let arity = match create_arity(&variants) {
         Ok(a) => a,
         Err(e) => return e.to_compile_error().into(),
@@ -27,8 +26,6 @@ pub fn peepmatic(input: TokenStream) -> TokenStream {
     let type_methods = create_type_methods(&variants);
 
     let expanded = quote! {
-        #operator
-
         impl Operator {
             #arity
             #type_methods
@@ -67,19 +64,6 @@ fn get_enum_variants(input: &DeriveInput) -> Result<Vec<OperatorVariant>> {
 struct OperatorVariant {
     syn: syn::Variant,
     opts: PeepmaticOpts,
-}
-
-fn create_enum_operator(
-    attrs: &[syn::Attribute],
-    variants: &[OperatorVariant],
-) -> impl quote::ToTokens {
-    let variants = variants.iter().map(|v| &v.syn);
-    quote! {
-        #( #attrs )*
-        pub enum Operator {
-            #( #variants ),*
-        }
-    }
 }
 
 fn create_arity(variants: &[OperatorVariant]) -> Result<impl quote::ToTokens> {
@@ -189,33 +173,45 @@ fn create_type_methods(variants: &[OperatorVariant]) -> impl quote::ToTokens {
     }
 
     quote! {
-        pub(crate) fn result_type<'a>(
+        /// Get the result type of this operator.
+        pub fn result_type<'a, C>(
             &self,
-            context: &mut crate::verify::TypingContext<'a>,
+            context: &mut C,
             span: wast::Span,
-        ) -> crate::verify::TypeVar<'a> {
+        ) -> C::TypeVariable
+        where
+            C: 'a + TypingContext<'a>,
+        {
             match *self {
                 #( #result_types )*
             }
         }
 
-        pub(crate) fn immediate_types<'a>(
+        /// Get the immediate types of this operator.
+        pub fn immediate_types<'a, C>(
             &self,
-            context: &mut crate::verify::TypingContext<'a>,
+            context: &mut C,
             span: wast::Span,
-            types: &mut impl Extend<crate::verify::TypeVar<'a>>,
-        ) {
+            types: &mut impl Extend<C::TypeVariable>,
+        )
+        where
+            C: 'a + TypingContext<'a>,
+        {
             match *self {
                 #( #imm_types )*
             }
         }
 
-        pub(crate) fn param_types<'a>(
+        /// Get the parameter types of this operator.
+        pub fn param_types<'a, C>(
             &self,
-            context: &mut crate::verify::TypingContext<'a>,
+            context: &mut C,
             span: wast::Span,
-            types: &mut impl Extend<crate::verify::TypeVar<'a>>,
-        ) {
+            types: &mut impl Extend<C::TypeVariable>,
+        )
+        where
+            C: 'a + TypingContext<'a>,
+        {
             match *self {
                 #( #param_types )*
             }

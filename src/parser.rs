@@ -55,23 +55,13 @@ use wast::{
 mod tok {
     use wast::{custom_keyword, custom_reserved};
 
-    custom_keyword!(ashr);
     custom_keyword!(bit_width = "bit-width");
-    custom_keyword!(bor);
     custom_reserved!(dollar = "$");
     custom_keyword!(r#false = "false");
     custom_keyword!(fits_in_native_word = "fits-in-native-word");
-    custom_keyword!(iadd);
-    custom_keyword!(iadd_imm);
-    custom_keyword!(iconst);
-    custom_keyword!(imul);
-    custom_keyword!(imul_imm);
-    custom_keyword!(ishl);
-    custom_keyword!(isub);
     custom_keyword!(is_power_of_two = "is-power-of-two");
     custom_keyword!(log2);
     custom_reserved!(replace = "=>");
-    custom_keyword!(sshr);
     custom_keyword!(r#true = "true");
     custom_keyword!(when);
 }
@@ -353,48 +343,6 @@ where
     }
 }
 
-impl<'a> Parse<'a> for Operator {
-    fn parse(p: Parser<'a>) -> ParseResult<Self> {
-        if p.peek::<tok::ashr>() {
-            p.parse::<tok::ashr>()?;
-            return Ok(Operator::Ashr);
-        }
-        if p.peek::<tok::bor>() {
-            p.parse::<tok::bor>()?;
-            return Ok(Operator::Bor);
-        }
-        if p.peek::<tok::iadd>() {
-            p.parse::<tok::iadd>()?;
-            return Ok(Operator::Iadd);
-        }
-        if p.peek::<tok::iadd_imm>() {
-            p.parse::<tok::iadd_imm>()?;
-            return Ok(Operator::IaddImm);
-        }
-        if p.peek::<tok::iconst>() {
-            p.parse::<tok::iconst>()?;
-            return Ok(Operator::Iconst);
-        }
-        if p.peek::<tok::imul>() {
-            p.parse::<tok::imul>()?;
-            return Ok(Operator::Imul);
-        }
-        if p.peek::<tok::imul_imm>() {
-            p.parse::<tok::imul_imm>()?;
-            return Ok(Operator::ImulImm);
-        }
-        if p.peek::<tok::ishl>() {
-            p.parse::<tok::ishl>()?;
-            return Ok(Operator::Ishl);
-        }
-        if p.peek::<tok::sshr>() {
-            p.parse::<tok::sshr>()?;
-            return Ok(Operator::Sshr);
-        }
-        Err(p.error("expected operator"))
-    }
-}
-
 impl<'a> Parse<'a> for Precondition<'a> {
     fn parse(p: Parser<'a>) -> ParseResult<Self> {
         let span = p.cur_span();
@@ -533,6 +481,7 @@ impl<'a> Parse<'a> for UnquoteOperator {
 #[cfg(test)]
 mod test {
     use super::*;
+    use peepmatic_runtime::operator::Operator;
 
     macro_rules! test_parse {
         (

@@ -9,4 +9,6 @@ edition = "2018"
 [dependencies]
 bumpalo = "3.2.0"
 peepmatic-automata = { version = "0.1.0", path = "../automata", features = ["serde"] }
+peepmatic-macro = { version = "0.1.0", path = "../macro" }
 serde = { version = "1.0.105", features = ["derive"] }
+wast = "13.0.0"

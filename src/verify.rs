@@ -14,6 +14,7 @@
 
 use crate::ast::{Span as _, *};
 use crate::traversals::{Dfs, TraversalEvent};
+use peepmatic_runtime::operator::{Operator, TypingContext as TypingContextTrait};
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::fmt;
@@ -298,18 +299,6 @@ impl<'a> TypingContext<'a> {
         }
     }
 
-    #[allow(non_snake_case)]
-    pub(crate) fn iNN(&mut self, span: Span) -> TypeVar<'a> {
-        if let Some(ty) = self.operation_scope.get("iNN") {
-            return ty.clone();
-        }
-
-        let ty = self.new_type_var();
-        self.assert_is_integer(span, &ty);
-        self.operation_scope.insert("iNN", ty.clone());
-        ty
-    }
-
     fn assert_is_integer(&mut self, span: Span, ty: &TypeVar<'a>) {
         let is_int = self.type_kind_sort.variants[0]
             .tester
@@ -425,6 +414,21 @@ impl<'a> TypingContext<'a> {
     }
 }
 
+impl<'a> TypingContextTrait<'a> for TypingContext<'a> {
+    type TypeVariable = TypeVar<'a>;
+
+    fn iNN(&mut self, span: Span) -> TypeVar<'a> {
+        if let Some(ty) = self.operation_scope.get("iNN") {
+            return ty.clone();
+        }
+
+        let ty = self.new_type_var();
+        self.assert_is_integer(span, &ty);
+        self.operation_scope.insert("iNN", ty.clone());
+        ty
+    }
+}
+
 #[derive(Clone)]
 pub(crate) struct TypeVar<'a> {
     kind: z3::ast::Datatype<'a>,
@@ -493,11 +497,11 @@ fn collect_type_constraints<'a>(
                 let mut operand_types = vec![];
                 {
                     let mut scope = context.enter_operation_scope();
-                    result_ty = op.operator.result_type(&mut scope, op.span);
+                    result_ty = op.operator.result_type(&mut *scope, op.span);
                     op.operator
-                        .immediate_types(&mut scope, op.span, &mut operand_types);
+                        .immediate_types(&mut *scope, op.span, &mut operand_types);
                     op.operator
-                        .param_types(&mut scope, op.span, &mut operand_types);
+                        .param_types(&mut *scope, op.span, &mut operand_types);
                 }
 
                 if op.operands.len() != operand_types.len() {
@@ -558,11 +562,11 @@ fn collect_type_constraints<'a>(
                 let mut operand_types = vec![];
                 {
                     let mut scope = context.enter_operation_scope();
-                    result_ty = op.operator.result_type(&mut scope, op.span);
+                    result_ty = op.operator.result_type(&mut *scope, op.span);
                     op.operator
-                        .immediate_types(&mut scope, op.span, &mut operand_types);
+                        .immediate_types(&mut *scope, op.span, &mut operand_types);
                     op.operator
-                        .param_types(&mut scope, op.span, &mut operand_types);
+                        .param_types(&mut *scope, op.span, &mut operand_types);
                 }
 
                 if op.operands.len() != operand_types.len() {

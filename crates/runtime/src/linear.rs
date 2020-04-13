@@ -6,6 +6,7 @@
 //! See also `src/linearize.rs` for the AST to linear IR translation pass.
 
 use crate::integer_interner::{IntegerId, IntegerInterner};
+use crate::operator::Operator;
 use crate::paths::{PathId, PathInterner};
 use serde::{Deserialize, Serialize};
 
@@ -161,60 +162,21 @@ pub enum Action {
         value: bool,
     },
 
-    /// Implicitly define the n^th RHS instruction by making an `ashr`.
-    MakeAshr {
-        /// The right-hand side operands for the `ashr`.
-        operands: [RhsId; 2],
-    },
-
-    /// Implicitly define the n^th RHS instruction by making a `bor`.
-    MakeBor {
-        /// The right-hand side operands for the `bor`.
-        operands: [RhsId; 2],
-    },
-
-    /// Implicitly define the n^th RHS instruction by making an `iadd`.
-    MakeIadd {
-        /// The right-hand side operands for the `iadd`.
-        operands: [RhsId; 2],
-    },
-
-    /// Implicitly define the n^th RHS instruction by making an `iadd_imm`.
-    MakeIaddImm {
-        /// The right-hand side operands for the `iadd_imm`. The first must be a
-        /// constant value.
-        operands: [RhsId; 2],
-    },
-
-    /// Implicitly define the n^th RHS instruction by making an `iconst`.
-    MakeIconst {
-        /// The right-hand side operand for this `iconst`. Must be a constant
-        /// value.
+    /// Implicitly define the n^th RHS instruction by making a unary
+    /// instruction.
+    MakeUnaryInst {
+        /// The operand for this instruction.
         operand: RhsId,
+        /// The operator for this instruction.
+        operator: Operator,
     },
 
-    /// Implicitly define the n^th RHS instruction by making an `imul`.
-    MakeImul {
-        /// The right-hand side operands for this `imul`.
+    /// Implicitly define the n^th RHS instruction by making a binary
+    /// instruction.
+    MakeBinaryInst {
+        /// The operands for this instruction.
         operands: [RhsId; 2],
-    },
-
-    /// Implicitly define the n^th RHS instruction by making an `imul_imm`.
-    MakeImulImm {
-        /// The right-hand side operands for this `imul`. The first must be a
-        /// constant value.
-        operands: [RhsId; 2],
-    },
-
-    /// Implicitly define the n^th RHS instruction by making an `ishl`.
-    MakeIshl {
-        /// The right-hand side operands for this `ishl`.
-        operands: [RhsId; 2],
-    },
-
-    /// Implicitly define the n^th RHS instruction by making a `sshr`.
-    MakeSshr {
-        /// The right-hand side operands for this `sshr`.
-        operands: [RhsId; 2],
+        /// The opcode for this instruction.
+        operator: Operator,
     },
 }

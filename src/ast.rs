@@ -21,6 +21,7 @@
 //!   `DynAstRef`, which is an `enum` of all the different kinds of AST nodes.
 
 use peepmatic_macro::Ast;
+use peepmatic_runtime::operator::Operator;
 use std::marker::PhantomData;
 use wast::Id;
 
@@ -320,49 +321,6 @@ impl<'a> From<&'a Operation<'a, Rhs<'a>>> for DynAstRef<'a> {
     fn from(o: &'a Operation<'a, Rhs<'a>>) -> DynAstRef<'a> {
         DynAstRef::RhsOperation(o)
     }
-}
-
-/// An operator.
-///
-/// These are a subset of Cranelift IR's operators.
-#[peepmatic_macro::peepmatic]
-#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
-pub enum Operator {
-    /// `ashr`
-    #[peepmatic(params(iNN, iNN), result(iNN))]
-    Ashr,
-
-    /// `bor`
-    #[peepmatic(params(iNN, iNN), result(iNN))]
-    Bor,
-
-    /// `iadd`
-    #[peepmatic(params(iNN, iNN), result(iNN))]
-    Iadd,
-
-    /// `iadd_imm`
-    #[peepmatic(immediates(iNN), params(iNN), result(iNN))]
-    IaddImm,
-
-    /// `iconst`
-    #[peepmatic(immediates(iNN), result(iNN))]
-    Iconst,
-
-    /// `imul`
-    #[peepmatic(params(iNN, iNN), result(iNN))]
-    Imul,
-
-    /// `imul_imm`
-    #[peepmatic(immediates(iNN), params(iNN), result(iNN))]
-    ImulImm,
-
-    /// `ishl`
-    #[peepmatic(params(iNN, iNN), result(iNN))]
-    Ishl,
-
-    /// `sshr`
-    #[peepmatic(params(iNN, iNN), result(iNN))]
-    Sshr,
 }
 
 /// A precondition adds additional constraints to a pattern, such as "$C must be

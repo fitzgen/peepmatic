@@ -45,6 +45,7 @@ impl DotFmt<Option<u32>, linear::MatchOp, Vec<linear::Action>> for PeepholeDotFm
 
     fn fmt_output(&self, w: &mut impl Write, actions: &Vec<linear::Action>) -> io::Result<()> {
         use linear::Action::*;
+        use peepmatic_runtime::operator::Operator;
 
         if actions.is_empty() {
             return writeln!(w, "(none)");
@@ -62,47 +63,53 @@ impl DotFmt<Option<u32>, linear::MatchOp, Vec<linear::Action>> for PeepholeDotFm
                     write!(w, "make-iconst {}<br/>", self.1.lookup(*value))?
                 }
                 MakeBooleanConst { value } => write!(w, "make-bconst {}<br/>", value)?,
-                MakeAshr { operands } => write!(
-                    w,
-                    "make-ashr $rhs{}, $rhs{}<br/>",
-                    operands[0].0, operands[1].0
-                )?,
-                MakeBor { operands } => write!(
-                    w,
-                    "make-bor $rhs{}, $rhs{}<br/>",
-                    operands[0].0, operands[1].0
-                )?,
-                MakeIadd { operands } => write!(
-                    w,
-                    "make-iadd $rhs{}, $rhs{}<br/>",
-                    operands[0].0, operands[1].0
-                )?,
-                MakeIaddImm { operands } => write!(
-                    w,
-                    "make-iadd-imm $rhs{}, $rhs{}<br/>",
-                    operands[0].0, operands[1].0
-                )?,
-                MakeIconst { operand } => write!(w, "make-iconst $rhs{}<br/>", operand.0)?,
-                MakeImul { operands } => write!(
-                    w,
-                    "make-imul $rhs{}, $rhs{}<br/>",
-                    operands[0].0, operands[1].0
-                )?,
-                MakeImulImm { operands } => write!(
-                    w,
-                    "make-imul-imm $rhs{}, $rhs{}<br/>",
-                    operands[0].0, operands[1].0
-                )?,
-                MakeIshl { operands } => write!(
-                    w,
-                    "make-ishl $rhs{}, $rhs{}<br/>",
-                    operands[0].0, operands[1].0
-                )?,
-                MakeSshr { operands } => write!(
-                    w,
-                    "make-sshr $rhs{}, $rhs{}<br/>",
-                    operands[0].0, operands[1].0
-                )?,
+                MakeUnaryInst { operand, operator } => match operator {
+                    Operator::Iconst => write!(w, "make-iconst $rhs{}<br/>", operand.0)?,
+                    _ => unreachable!("not a unary operator: {:?}", operator),
+                },
+                MakeBinaryInst { operands, operator } => match operator {
+                    Operator::Ashr => write!(
+                        w,
+                        "make-ashr $rhs{}, $rhs{}<br/>",
+                        operands[0].0, operands[1].0
+                    )?,
+                    Operator::Bor => write!(
+                        w,
+                        "make-bor $rhs{}, $rhs{}<br/>",
+                        operands[0].0, operands[1].0
+                    )?,
+                    Operator::Iadd => write!(
+                        w,
+                        "make-iadd $rhs{}, $rhs{}<br/>",
+                        operands[0].0, operands[1].0
+                    )?,
+                    Operator::IaddImm => write!(
+                        w,
+                        "make-iadd-imm $rhs{}, $rhs{}<br/>",
+                        operands[0].0, operands[1].0
+                    )?,
+                    Operator::Imul => write!(
+                        w,
+                        "make-imul $rhs{}, $rhs{}<br/>",
+                        operands[0].0, operands[1].0
+                    )?,
+                    Operator::ImulImm => write!(
+                        w,
+                        "make-imul-imm $rhs{}, $rhs{}<br/>",
+                        operands[0].0, operands[1].0
+                    )?,
+                    Operator::Ishl => write!(
+                        w,
+                        "make-ishl $rhs{}, $rhs{}<br/>",
+                        operands[0].0, operands[1].0
+                    )?,
+                    Operator::Sshr => write!(
+                        w,
+                        "make-sshr $rhs{}, $rhs{}<br/>",
+                        operands[0].0, operands[1].0
+                    )?,
+                    _ => unreachable!("not a binary operator: {:?}", operator),
+                },
             }
         }
 

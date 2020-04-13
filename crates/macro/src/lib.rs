@@ -14,9 +14,9 @@ mod into_dyn_ast_ref;
 mod operator;
 mod span;
 
-#[proc_macro_attribute]
-pub fn peepmatic(_attr: TokenStream, input: TokenStream) -> TokenStream {
-    operator::peepmatic(input)
+#[proc_macro_derive(PeepmaticOperator, attributes(peepmatic))]
+pub fn operator(input: TokenStream) -> TokenStream {
+    operator::derive_operator(input)
 }
 
 #[proc_macro_derive(Ast, attributes(peepmatic))]
