@@ -116,9 +116,10 @@ pub fn compile_str(
 
     let automata = automatize(&opts);
     let paths = opts.paths;
+    let integers = opts.integers;
 
     if let Ok(path) = std::env::var("PEEPMATIC_DOT") {
-        let f = dot_fmt::PeepholeDotFmt(&paths);
+        let f = dot_fmt::PeepholeDotFmt(&paths, &integers);
         if let Err(e) = automata.write_dot_file(&f, &path) {
             panic!(
                 "failed to write GraphViz Dot file to PEEPMATIC_DOT={}; error: {}",
@@ -127,5 +128,9 @@ pub fn compile_str(
         }
     }
 
-    Ok(peepmatic_runtime::PeepholeOptimizer { paths, automata })
+    Ok(peepmatic_runtime::PeepholeOptimizer {
+        paths,
+        integers,
+        automata,
+    })
 }

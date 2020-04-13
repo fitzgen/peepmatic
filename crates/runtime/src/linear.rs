@@ -5,6 +5,7 @@
 //!
 //! See also `src/linearize.rs` for the AST to linear IR translation pass.
 
+use crate::integer_interner::{IntegerId, IntegerInterner};
 use crate::paths::{PathId, PathInterner};
 use serde::{Deserialize, Serialize};
 
@@ -16,6 +17,9 @@ pub struct Optimizations {
 
     /// The de-duplicated paths referenced by these optimizations.
     pub paths: PathInterner,
+
+    /// The integer literals referenced by these optimizations.
+    pub integers: IntegerInterner,
 }
 
 /// A linearized optimization.
@@ -142,7 +146,7 @@ pub enum Action {
     /// Implicitly define the n^th built up RHS instruction by making an `iconst`.
     MakeIntegerConst {
         /// The constant integer value for the `iconst` instruction.
-        value: i128,
+        value: IntegerId,
     },
 
     /// Implicitly define the n^th RHS instruction by making a `bconst`.

@@ -97,6 +97,7 @@
 use crate::ast::*;
 use crate::traversals::Dfs;
 use peepmatic_runtime::{
+    integer_interner::IntegerInterner,
     linear,
     paths::{Path, PathId, PathInterner},
 };
@@ -108,18 +109,24 @@ use wast::Id;
 pub fn linearize(opts: &Optimizations) -> linear::Optimizations {
     let mut optimizations = vec![];
     let mut paths = PathInterner::new();
+    let mut integers = IntegerInterner::new();
     for opt in &opts.optimizations {
-        let lin_opt = linearize_optimization(&mut paths, opt);
+        let lin_opt = linearize_optimization(&mut paths, &mut integers, opt);
         optimizations.push(lin_opt);
     }
     linear::Optimizations {
         optimizations,
         paths,
+        integers,
     }
 }
 
 /// Translate an AST optimization into a linear optimization!
-fn linearize_optimization(paths: &mut PathInterner, opt: &Optimization) -> linear::Optimization {
+fn linearize_optimization(
+    paths: &mut PathInterner,
+    integers: &mut IntegerInterner,
+    opt: &Optimization,
+) -> linear::Optimization {
     let mut increments: Vec<linear::Increment> = vec![];
 
     // Reusable sink for various `ChildNodes::child_nodes` calls so that we
@@ -136,7 +143,7 @@ fn linearize_optimization(paths: &mut PathInterner, opt: &Optimization) -> linea
     while let Some((path, pattern)) = patterns.next(paths) {
         // Create the matching parts of an `Increment` for this part of the
         // pattern, without any actions yet.
-        let (operation, expected) = pattern.to_linear_match_op(&lhs_canonicalizer, path);
+        let (operation, expected) = pattern.to_linear_match_op(integers, &lhs_canonicalizer, path);
         let mut inc = linear::Increment {
             operation,
             expected,
@@ -156,6 +163,7 @@ fn linearize_optimization(paths: &mut PathInterner, opt: &Optimization) -> linea
         // Create actions for building up all of the right-hand side that we
         // can right now.
         rhs_builder.add_unblocked_rhs_build_actions(
+            integers,
             &lhs_canonicalizer,
             &mut children,
             &mut inc.actions,
@@ -432,6 +440,7 @@ impl<'a> RhsBuilder<'a> {
     /// Case (2) is what we are primarily concerned with here.
     fn add_unblocked_rhs_build_actions(
         &mut self,
+        integers: &mut IntegerInterner,
         lhs_canonicalizer: &LhsCanonicalizer,
         children: &mut Vec<DynAstRef<'a>>,
         actions: &mut Vec<linear::Action>,
@@ -441,7 +450,7 @@ impl<'a> RhsBuilder<'a> {
                 return;
             }
 
-            actions.push(self.rhs_to_linear_action(&lhs_canonicalizer, rhs));
+            actions.push(self.rhs_to_linear_action(integers, lhs_canonicalizer, rhs));
             let id = linear::RhsId(self.rhs_span_to_id.len() as u32);
             self.rhs_span_to_id.insert(rhs.span(), id);
 
@@ -470,13 +479,14 @@ impl<'a> RhsBuilder<'a> {
 
     fn rhs_to_linear_action(
         &self,
+        integers: &mut IntegerInterner,
         lhs_canonicalizer: &LhsCanonicalizer,
         rhs: &Rhs,
     ) -> linear::Action {
         match rhs {
-            Rhs::ValueLiteral(ValueLiteral::Integer(i)) => {
-                linear::Action::MakeIntegerConst { value: i.value }
-            }
+            Rhs::ValueLiteral(ValueLiteral::Integer(i)) => linear::Action::MakeIntegerConst {
+                value: integers.intern(i.value),
+            },
             Rhs::ValueLiteral(ValueLiteral::Boolean(b)) => {
                 linear::Action::MakeBooleanConst { value: b.value }
             }
@@ -620,14 +630,14 @@ impl Pattern<'_> {
     /// runtime!
     fn to_linear_match_op(
         &self,
+        integers: &mut IntegerInterner,
         lhs_canonicalizer: &LhsCanonicalizer,
         path: PathId,
     ) -> (linear::MatchOp, Option<u32>) {
-        use std::convert::TryInto;
         match self {
             Pattern::ValueLiteral(ValueLiteral::Integer(Integer { value, .. })) => (
                 linear::MatchOp::IntegerValue { path },
-                Some((*value).try_into().unwrap()),
+                Some(integers.intern(*value).into()),
             ),
             Pattern::ValueLiteral(ValueLiteral::Boolean(Boolean { value, .. })) => {
                 (linear::MatchOp::BooleanValue { path }, Some(*value as u32))
@@ -678,6 +688,7 @@ impl Pattern<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use peepmatic_runtime::integer_interner::IntegerId;
 
     macro_rules! linearizes_to {
         ($name:ident, $source:expr, $make_expected:expr $(,)* ) => {
@@ -710,10 +721,18 @@ mod tests {
                 }
 
                 let mut paths = PathInterner::new();
-                let expected = $make_expected(&mut paths);
+                let mut p = |p: &[u8]| paths.intern(Path::new(&p));
+
+                let mut integers = IntegerInterner::new();
+                let mut i = |i: i128| integers.intern(i);
+
+                #[allow(unused_variables)]
+                let expected = $make_expected(&mut p, &mut i);
                 dbg!(&expected);
-                let actual = linearize_optimization(&mut paths, &opts.optimizations[0]);
+
+                let actual = linearize_optimization(&mut paths, &mut integers, &opts.optimizations[0]);
                 dbg!(&actual);
+
                 assert_eq!(expected, actual);
             }
         };
@@ -726,202 +745,213 @@ mod tests {
           (is-power-of-two $C))
     (ishl $x $C))
         ",
-        |paths: &mut PathInterner| linear::Optimization {
-            increments: vec![
-                linear::Increment {
-                    operation: linear::MatchOp::Opcode {
-                        path: paths.intern(Path::new(&[0]))
+        |p: &mut dyn FnMut(&[u8]) -> PathId, i: &mut dyn FnMut(i128) -> IntegerId| {
+            linear::Optimization {
+                increments: vec![
+                    linear::Increment {
+                        operation: linear::MatchOp::Opcode { path: p(&[0]) },
+                        expected: Some(5),
+                        actions: vec![
+                            linear::Action::BindLhs {
+                                id: linear::LhsId(0),
+                                path: p(&[0, 0]),
+                            },
+                            linear::Action::BindLhs {
+                                id: linear::LhsId(1),
+                                path: p(&[0, 1]),
+                            },
+                            linear::Action::GetLhsBinding {
+                                id: linear::LhsId(0),
+                            },
+                            linear::Action::GetLhsBinding {
+                                id: linear::LhsId(1),
+                            },
+                            linear::Action::MakeIshl {
+                                operands: [linear::RhsId(0), linear::RhsId(1)],
+                            },
+                        ],
                     },
-                    expected: Some(5),
-                    actions: vec![
-                        linear::Action::BindLhs {
-                            id: linear::LhsId(0),
-                            path: paths.intern(Path::new(&[0, 0])),
-                        },
-                        linear::Action::BindLhs {
+                    linear::Increment {
+                        operation: linear::MatchOp::IsConst { path: p(&[0, 1]) },
+                        expected: Some(1),
+                        actions: vec![],
+                    },
+                    linear::Increment {
+                        operation: linear::MatchOp::IsPowerOfTwo {
                             id: linear::LhsId(1),
-                            path: paths.intern(Path::new(&[0, 1])),
                         },
-                        linear::Action::GetLhsBinding {
-                            id: linear::LhsId(0)
-                        },
-                        linear::Action::GetLhsBinding {
-                            id: linear::LhsId(1)
-                        },
-                        linear::Action::MakeIshl {
-                            operands: [linear::RhsId(0), linear::RhsId(1)],
-                        }
-                    ]
-                },
-                linear::Increment {
-                    operation: linear::MatchOp::IsConst {
-                        path: paths.intern(Path::new(&[0, 1])),
+                        expected: Some(1),
+                        actions: vec![],
                     },
-                    expected: Some(1),
-                    actions: vec![]
-                },
-                linear::Increment {
-                    operation: linear::MatchOp::IsPowerOfTwo {
-                        id: linear::LhsId(1)
-                    },
-                    expected: Some(1),
-                    actions: vec![]
-                }
-            ]
+                ],
+            }
         },
     );
 
     linearizes_to!(
         variable_pattern_id_optimization,
         "(=> $x $x)",
-        |paths: &mut PathInterner| linear::Optimization {
-            increments: vec![linear::Increment {
-                operation: linear::MatchOp::Nop,
-                expected: None,
-                actions: vec![
-                    linear::Action::BindLhs {
-                        id: linear::LhsId(0),
-                        path: paths.intern(Path::new(&[0])),
-                    },
-                    linear::Action::GetLhsBinding {
-                        id: linear::LhsId(0),
-                    },
-                ],
-            }],
+        |p: &mut dyn FnMut(&[u8]) -> PathId, i: &mut dyn FnMut(i128) -> IntegerId| {
+            linear::Optimization {
+                increments: vec![linear::Increment {
+                    operation: linear::MatchOp::Nop,
+                    expected: None,
+                    actions: vec![
+                        linear::Action::BindLhs {
+                            id: linear::LhsId(0),
+                            path: p(&[0]),
+                        },
+                        linear::Action::GetLhsBinding {
+                            id: linear::LhsId(0),
+                        },
+                    ],
+                }],
+            }
         },
     );
 
     linearizes_to!(
         constant_pattern_id_optimization,
         "(=> $C $C)",
-        |paths: &mut PathInterner| linear::Optimization {
-            increments: vec![linear::Increment {
-                operation: linear::MatchOp::IsConst {
-                    path: paths.intern(Path::new(&[0]))
-                },
-                expected: Some(1),
-                actions: vec![
-                    linear::Action::BindLhs {
-                        id: linear::LhsId(0),
-                        path: paths.intern(Path::new(&[0])),
-                    },
-                    linear::Action::GetLhsBinding {
-                        id: linear::LhsId(0),
-                    },
-                ],
-            }],
+        |p: &mut dyn FnMut(&[u8]) -> PathId, i: &mut dyn FnMut(i128) -> IntegerId| {
+            linear::Optimization {
+                increments: vec![linear::Increment {
+                    operation: linear::MatchOp::IsConst { path: p(&[0]) },
+                    expected: Some(1),
+                    actions: vec![
+                        linear::Action::BindLhs {
+                            id: linear::LhsId(0),
+                            path: p(&[0]),
+                        },
+                        linear::Action::GetLhsBinding {
+                            id: linear::LhsId(0),
+                        },
+                    ],
+                }],
+            }
         },
     );
 
     linearizes_to!(
         boolean_literal_id_optimization,
         "(=> true true)",
-        |paths: &mut PathInterner| linear::Optimization {
-            increments: vec![linear::Increment {
-                operation: linear::MatchOp::BooleanValue {
-                    path: paths.intern(Path::new(&[0])),
-                },
-                expected: Some(1),
-                actions: vec![linear::Action::MakeBooleanConst { value: true }],
-            }]
+        |p: &mut dyn FnMut(&[u8]) -> PathId, i: &mut dyn FnMut(i128) -> IntegerId| {
+            linear::Optimization {
+                increments: vec![linear::Increment {
+                    operation: linear::MatchOp::BooleanValue { path: p(&[0]) },
+                    expected: Some(1),
+                    actions: vec![linear::Action::MakeBooleanConst { value: true }],
+                }],
+            }
         },
     );
 
     linearizes_to!(
         number_literal_id_optimization,
         "(=> 5 5)",
-        |paths: &mut PathInterner| linear::Optimization {
-            increments: vec![linear::Increment {
-                operation: linear::MatchOp::IntegerValue {
-                    path: paths.intern(Path::new(&[0])),
-                },
-                expected: Some(5),
-                actions: vec![linear::Action::MakeIntegerConst { value: 5 }],
-            }]
+        |p: &mut dyn FnMut(&[u8]) -> PathId, i: &mut dyn FnMut(i128) -> IntegerId| {
+            linear::Optimization {
+                increments: vec![linear::Increment {
+                    operation: linear::MatchOp::IntegerValue { path: p(&[0]) },
+                    expected: Some(i(5).into()),
+                    actions: vec![linear::Action::MakeIntegerConst { value: i(5) }],
+                }],
+            }
         },
     );
 
     linearizes_to!(
         operation_id_optimization,
         "(=> (iconst $C) (iconst $C))",
-        |paths: &mut PathInterner| linear::Optimization {
-            increments: vec![
-                linear::Increment {
-                    operation: linear::MatchOp::Opcode {
-                        path: paths.intern(Path::new(&[0])),
+        |p: &mut dyn FnMut(&[u8]) -> PathId, i: &mut dyn FnMut(i128) -> IntegerId| {
+            linear::Optimization {
+                increments: vec![
+                    linear::Increment {
+                        operation: linear::MatchOp::Opcode { path: p(&[0]) },
+                        expected: Some(4),
+                        actions: vec![
+                            linear::Action::BindLhs {
+                                id: linear::LhsId(0),
+                                path: p(&[0, 0]),
+                            },
+                            linear::Action::GetLhsBinding {
+                                id: linear::LhsId(0),
+                            },
+                            linear::Action::MakeIconst {
+                                operand: linear::RhsId(0),
+                            },
+                        ],
                     },
-                    expected: Some(4),
-                    actions: vec![
-                        linear::Action::BindLhs {
-                            id: linear::LhsId(0),
-                            path: paths.intern(Path::new(&[0, 0])),
-                        },
-                        linear::Action::GetLhsBinding {
-                            id: linear::LhsId(0),
-                        },
-                        linear::Action::MakeIconst {
-                            operand: linear::RhsId(0),
-                        }
-                    ],
-                },
-                linear::Increment {
-                    operation: linear::MatchOp::IsConst {
-                        path: paths.intern(Path::new(&[0, 0])),
+                    linear::Increment {
+                        operation: linear::MatchOp::IsConst { path: p(&[0, 0]) },
+                        expected: Some(1),
+                        actions: vec![],
                     },
-                    expected: Some(1),
-                    actions: vec![],
-                }
-            ]
+                ],
+            }
         },
     );
 
     linearizes_to!(
         redundant_bor,
         "(=> (bor $x (bor $x $y)) (bor $x $y))",
-        |paths: &mut PathInterner| linear::Optimization {
-            increments: vec![
-                linear::Increment {
-                    operation: linear::MatchOp::Opcode {
-                        path: paths.intern(Path::new(&[0]))
+        |p: &mut dyn FnMut(&[u8]) -> PathId, i: &mut dyn FnMut(i128) -> IntegerId| {
+            linear::Optimization {
+                increments: vec![
+                    linear::Increment {
+                        operation: linear::MatchOp::Opcode { path: p(&[0]) },
+                        expected: Some(1),
+                        actions: vec![
+                            linear::Action::BindLhs {
+                                id: linear::LhsId(0),
+                                path: p(&[0, 0]),
+                            },
+                            linear::Action::GetLhsBinding {
+                                id: linear::LhsId(0),
+                            },
+                        ],
                     },
-                    expected: Some(1),
-                    actions: vec![
-                        linear::Action::BindLhs {
+                    linear::Increment {
+                        operation: linear::MatchOp::Opcode { path: p(&[0, 1]) },
+                        expected: Some(1),
+                        actions: vec![
+                            linear::Action::BindLhs {
+                                id: linear::LhsId(1),
+                                path: p(&[0, 1, 1]),
+                            },
+                            linear::Action::GetLhsBinding {
+                                id: linear::LhsId(1),
+                            },
+                            linear::Action::MakeBor {
+                                operands: [linear::RhsId(0), linear::RhsId(1)],
+                            },
+                        ],
+                    },
+                    linear::Increment {
+                        operation: linear::MatchOp::Eq {
                             id: linear::LhsId(0),
-                            path: paths.intern(Path::new(&[0, 0])),
+                            path: p(&[0, 1, 0]),
                         },
-                        linear::Action::GetLhsBinding {
-                            id: linear::LhsId(0),
-                        },
-                    ]
-                },
-                linear::Increment {
-                    operation: linear::MatchOp::Opcode {
-                        path: paths.intern(Path::new(&[0, 1]))
+                        expected: Some(1),
+                        actions: vec![],
                     },
-                    expected: Some(1),
-                    actions: vec![
-                        linear::Action::BindLhs {
-                            id: linear::LhsId(1),
-                            path: paths.intern(Path::new(&[0, 1, 1])),
-                        },
-                        linear::Action::GetLhsBinding {
-                            id: linear::LhsId(1),
-                        },
-                        linear::Action::MakeBor {
-                            operands: [linear::RhsId(0), linear::RhsId(1)],
-                        }
-                    ],
-                },
-                linear::Increment {
-                    operation: linear::MatchOp::Eq {
-                        id: linear::LhsId(0),
-                        path: paths.intern(Path::new(&[0, 1, 0])),
-                    },
-                    expected: Some(1),
-                    actions: vec![],
-                },
-            ]
+                ],
+            }
         },
+    );
+
+    linearizes_to!(
+        large_integers,
+        // i128::MAX
+        "(=> 170141183460469231731687303715884105727 0)",
+        |p: &mut dyn FnMut(&[u8]) -> PathId, i: &mut dyn FnMut(i128) -> IntegerId| {
+            linear::Optimization {
+                increments: vec![linear::Increment {
+                    operation: linear::MatchOp::IntegerValue { path: p(&[0]) },
+                    expected: Some(i(170141183460469231731687303715884105727).into()),
+                    actions: vec![linear::Action::MakeIntegerConst { value: i(0) }],
+                }],
+            }
+        }
     );
 }

@@ -29,6 +29,7 @@ pub fn sort_least_to_most_general(opts: &mut linear::Optimizations) {
     let linear::Optimizations {
         ref mut optimizations,
         ref paths,
+        ..
     } = opts;
 
     // NB: we *cannot* use an unstable sort here, because we want deterministic
@@ -43,6 +44,7 @@ pub fn sort_lexicographically(opts: &mut linear::Optimizations) {
     let linear::Optimizations {
         ref mut optimizations,
         ref paths,
+        ..
     } = opts;
 
     // NB: we *cannot* use an unstable sort here, same as above.
@@ -422,6 +424,7 @@ mod tests {
 
                 let linear::Optimizations {
                     mut paths,
+                    mut integers,
                     optimizations,
                 } = opts;
 
@@ -436,7 +439,8 @@ mod tests {
                     .collect();
 
                 let mut p = |p: &[u8]| paths.intern(Path::new(&p));
-                let expected = $make_expected(&mut p);
+                let mut i = |i: i128| Some(integers.intern(i).into());
+                let expected = $make_expected(&mut p, &mut i);
 
                 assert_eq!(expected, actual);
             }
@@ -455,14 +459,14 @@ mod tests {
 (=>       (iadd $x 42)                       0)
 (=>       (iadd $x (iadd $y $z))             0)
 ",
-        |p: &mut dyn FnMut(&[u8]) -> PathId| vec![
+        |p: &mut dyn FnMut(&[u8]) -> PathId, i: &mut dyn FnMut(i128) -> Option<u32>| vec![
             vec![
                 (Opcode { path: p(&[0]) }, Some(2)),
                 (Opcode { path: p(&[0, 1]) }, Some(2))
             ],
             vec![
                 (Opcode { path: p(&[0]) }, Some(2)),
-                (IntegerValue { path: p(&[0, 1]) }, Some(42))
+                (IntegerValue { path: p(&[0, 1]) }, i(42))
             ],
             vec![
                 (Opcode { path: p(&[0]) }, Some(2)),
@@ -530,7 +534,19 @@ mod tests {
                             .collect()
                     })
                     .collect();
-                let expected = $make_expected(&mut |p| opts.paths.intern(Path::new(&p)));
+
+                let linear::Optimizations {
+                    ref mut paths,
+                    ref mut integers,
+                    ..
+                } = opts;
+
+                let mut p = |p: &[u8]| paths.intern(Path::new(&p));
+                let mut i = |i: i128| Some(integers.intern(i).into());
+
+                #[allow(unused_variables)]
+                let expected = $make_expected(&mut p, &mut i);
+
                 assert_eq!(expected, actual);
             }
         };
@@ -542,7 +558,7 @@ mod tests {
 (=> (iadd $w (iadd $x (iadd $y $z))) 0)
 (=> (iadd $x $C)                     0)
 ",
-        |p: &mut dyn FnMut(&[u8]) -> PathId| vec![
+        |p: &mut dyn FnMut(&[u8]) -> PathId, i: &mut dyn FnMut(i128) -> Option<u32>| vec![
             vec![
                 (Opcode { path: p(&[0]) }, Some(2)),
                 (Opcode { path: p(&[0, 1]) }, Some(2)),
@@ -582,30 +598,30 @@ mod tests {
 (=> (imul 2 $x) (ishl $x 1))
 (=> (imul $x 2) (ishl $x 1))
 ",
-        |p: &mut dyn FnMut(&[u8]) -> PathId| vec![
+        |p: &mut dyn FnMut(&[u8]) -> PathId, i: &mut dyn FnMut(i128) -> Option<u32>| vec![
             vec![
                 (Opcode { path: p(&[0]) }, Some(5)),
-                (IntegerValue { path: p(&[0, 0]) }, Some(2))
+                (IntegerValue { path: p(&[0, 0]) }, i(2))
             ],
             vec![
                 (Opcode { path: p(&[0]) }, Some(5)),
-                (IntegerValue { path: p(&[0, 0]) }, Some(1)),
+                (IntegerValue { path: p(&[0, 0]) }, i(1)),
             ],
             vec![
                 (Opcode { path: p(&[0]) }, Some(5)),
-                (IntegerValue { path: p(&[0, 1]) }, Some(2))
+                (IntegerValue { path: p(&[0, 1]) }, i(2))
             ],
             vec![
                 (Opcode { path: p(&[0]) }, Some(5)),
-                (IntegerValue { path: p(&[0, 1]) }, Some(1)),
+                (IntegerValue { path: p(&[0, 1]) }, i(1)),
             ],
             vec![
                 (Opcode { path: p(&[0]) }, Some(2)),
-                (IntegerValue { path: p(&[0, 0]) }, Some(0)),
+                (IntegerValue { path: p(&[0, 0]) }, i(0)),
             ],
             vec![
                 (Opcode { path: p(&[0]) }, Some(2)),
-                (IntegerValue { path: p(&[0, 1]) }, Some(0)),
+                (IntegerValue { path: p(&[0, 1]) }, i(0)),
             ],
         ]
     );
@@ -620,26 +636,26 @@ mod tests {
 (=> 4 4)
 (=> 5 5)
 ",
-        |p: &mut dyn FnMut(&[u8]) -> PathId| vec![
-            vec![(IntegerValue { path: p(&[0]) }, Some(5))],
-            vec![(IntegerValue { path: p(&[0]) }, Some(4))],
-            vec![(IntegerValue { path: p(&[0]) }, Some(3))],
-            vec![(IntegerValue { path: p(&[0]) }, Some(2))],
-            vec![(IntegerValue { path: p(&[0]) }, Some(1))],
-            vec![(IntegerValue { path: p(&[0]) }, Some(0))],
+        |p: &mut dyn FnMut(&[u8]) -> PathId, i: &mut dyn FnMut(i128) -> Option<u32>| vec![
+            vec![(IntegerValue { path: p(&[0]) }, i(5))],
+            vec![(IntegerValue { path: p(&[0]) }, i(4))],
+            vec![(IntegerValue { path: p(&[0]) }, i(3))],
+            vec![(IntegerValue { path: p(&[0]) }, i(2))],
+            vec![(IntegerValue { path: p(&[0]) }, i(1))],
+            vec![(IntegerValue { path: p(&[0]) }, i(0))],
         ]
     );
 
     test_fallback_insertion!(
         no_fallbacks_after_same_op_with_different_expected_results_with_long_tail,
         "
-(=> (iadd 1 (iadd $x (iadd $y $z))) 0)
-(=> (iadd 0 $C) 0)
+(=> (iadd 999 $C) 0)
+(=> (iadd 666 (iadd $x (iadd $y $z))) 0)
 ",
-        |p: &mut dyn FnMut(&[u8]) -> PathId| vec![
+        |p: &mut dyn FnMut(&[u8]) -> PathId, i: &mut dyn FnMut(i128) -> Option<u32>| vec![
             vec![
                 (Opcode { path: p(&[0]) }, Some(2)),
-                (IntegerValue { path: p(&[0, 0]) }, Some(1)),
+                (IntegerValue { path: p(&[0, 0]) }, i(666)),
                 (Opcode { path: p(&[0, 1]) }, Some(2)),
                 (
                     Opcode {
@@ -652,9 +668,9 @@ mod tests {
             // integer values.
             vec![
                 (Opcode { path: p(&[0]) }, Some(2)),
-                (IntegerValue { path: p(&[0, 0]) }, Some(0)),
+                (IntegerValue { path: p(&[0, 0]) }, i(999)),
                 (IsConst { path: p(&[0, 1]) }, Some(1))
-            ]
+            ],
         ]
     );
 }

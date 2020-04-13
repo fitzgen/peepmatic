@@ -70,6 +70,7 @@ pub struct PathInterner {
 
 impl PathInterner {
     /// Construct a new, empty `PathInterner`.
+    #[inline]
     pub fn new() -> Self {
         Self::default()
     }

@@ -17,6 +17,7 @@
 #![deny(missing_docs)]
 #![deny(missing_debug_implementations)]
 
+pub mod integer_interner;
 pub mod linear;
 pub mod paths;
 
@@ -31,6 +32,10 @@ use serde::{Deserialize, Serialize};
 pub struct PeepholeOptimizer {
     /// The instruction paths referenced by the peephole optimizer.
     pub paths: paths::PathInterner,
+
+    /// Not all integers we're matching on fit in the `u32` that we use as the
+    /// result of match operations. So we intern them and refer to them by id.
+    pub integers: integer_interner::IntegerInterner,
 
     /// The underlying automata for matching optimizations' left-hand sides, and
     /// building up the corresponding right-hand side.

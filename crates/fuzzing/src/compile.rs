@@ -55,4 +55,11 @@ mod tests {
             (=> (bor $y $x) $x)
         ");
     }
+
+    #[test]
+    fn regression_2() {
+        compile(b"
+            (=> (sshr $x 11111111110) $x)
+        ");
+    }
 }

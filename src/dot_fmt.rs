@@ -3,11 +3,15 @@
 //! See also `crates/automata/src/dot.rs`.
 
 use peepmatic_automata::dot::DotFmt;
-use peepmatic_runtime::{linear, paths};
+use peepmatic_runtime::{
+    integer_interner::IntegerInterner,
+    linear,
+    paths::{PathId, PathInterner},
+};
 use std::io::{self, Write};
 
 #[derive(Debug)]
-pub(crate) struct PeepholeDotFmt<'a>(pub(crate) &'a paths::PathInterner);
+pub(crate) struct PeepholeDotFmt<'a>(pub(crate) &'a PathInterner, pub(crate) &'a IntegerInterner);
 
 impl DotFmt<Option<u32>, linear::MatchOp, Vec<linear::Action>> for PeepholeDotFmt<'_> {
     fn fmt_alphabet(&self, w: &mut impl Write, ch: &Option<u32>) -> io::Result<()> {
@@ -53,7 +57,9 @@ impl DotFmt<Option<u32>, linear::MatchOp, Vec<linear::Action>> for PeepholeDotFm
                 BindLhs { id, path } => write!(w, "bind-lhs $lhs{} @ {}<br/>", id.0, p(path))?,
                 GetLhsBinding { id } => write!(w, "get-lhs-binding $lhs{}<br/>", id.0)?,
                 Log2 { operand } => write!(w, "log2 $rhs{}<br/>", operand.0)?,
-                MakeIntegerConst { value } => write!(w, "make-iconst {}<br/>", value)?,
+                MakeIntegerConst { value } => {
+                    write!(w, "make-iconst {}<br/>", self.1.lookup(*value))?
+                }
                 MakeBooleanConst { value } => write!(w, "make-bconst {}<br/>", value)?,
                 MakeAshr { operands } => write!(
                     w,
@@ -103,8 +109,8 @@ impl DotFmt<Option<u32>, linear::MatchOp, Vec<linear::Action>> for PeepholeDotFm
     }
 }
 
-fn p<'a>(paths: &'a paths::PathInterner) -> impl Fn(&paths::PathId) -> String + 'a {
-    move |path: &paths::PathId| {
+fn p<'a>(paths: &'a PathInterner) -> impl Fn(&PathId) -> String + 'a {
+    move |path: &PathId| {
         let mut s = vec![];
         for b in paths.lookup(*path).0 {
             s.push(b.to_string());
