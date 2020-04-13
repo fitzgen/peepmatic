@@ -79,6 +79,12 @@ pub enum MatchOp {
         id: LhsId,
     },
 
+    /// Does the value fit in our target architecture's native word size?
+    FitsInNativeWord {
+        /// The id of the value we're checking whether fits or not.
+        id: LhsId,
+    },
+
     /// Is the instruction at the given path the same SSA value as the value
     /// bound on the left-hand side?
     Eq {

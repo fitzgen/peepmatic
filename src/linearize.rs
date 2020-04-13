@@ -618,6 +618,19 @@ impl Precondition<'_> {
                     actions: vec![],
                 }
             }
+            Constraint::FitsInNativeWord => {
+                let id = match &self.operands[0] {
+                    ConstraintOperand::Constant(Constant { id, .. })
+                        | ConstraintOperand::Variable(Variable { id, .. }) => id,
+                    _ => unreachable!("checked in verification"),
+                };
+                let id = lhs_canonicalizer.get(&id);
+                linear::Increment {
+                    operation: linear::MatchOp::FitsInNativeWord { id },
+                    expected: Some(1),
+                    actions: vec![],
+                }
+            }
         }
     }
 }

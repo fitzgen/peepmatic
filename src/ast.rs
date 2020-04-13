@@ -390,6 +390,9 @@ pub enum Constraint {
 
     /// Check the bit width of a value.
     BitWidth,
+
+    /// Does the argument fit within our target architecture's native word size?
+    FitsInNativeWord,
 }
 
 /// An operand of a precondition's constraint.

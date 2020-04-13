@@ -33,6 +33,7 @@ impl DotFmt<Option<u32>, linear::MatchOp, Vec<linear::Action>> for PeepholeDotFm
             IsConst { path } => write!(w, "is-const? @ {}", p(path))?,
             IsPowerOfTwo { id } => write!(w, "is-power-of-two? $lhs{}", id.0)?,
             BitWidth { id } => write!(w, "bit-width $lhs{}", id.0)?,
+            FitsInNativeWord { id } => write!(w, "fits-in-native-word $lhs{}", id.0)?,
             Eq { id, path } => write!(w, "eq? $lhs{} @ {}", id.0, p(path))?,
             IntegerValue { path } => write!(w, "integer-value @ {}", p(path))?,
             BooleanValue { path } => write!(w, "boolean-value @ {}", p(path))?,

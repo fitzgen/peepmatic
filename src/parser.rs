@@ -60,6 +60,7 @@ mod tok {
     custom_keyword!(bor);
     custom_reserved!(dollar = "$");
     custom_keyword!(r#false = "false");
+    custom_keyword!(fits_in_native_word = "fits-in-native-word");
     custom_keyword!(iadd);
     custom_keyword!(iadd_imm);
     custom_keyword!(iconst);
@@ -422,6 +423,10 @@ impl<'a> Parse<'a> for Constraint {
             p.parse::<tok::bit_width>()?;
             return Ok(Constraint::BitWidth);
         }
+        if p.peek::<tok::fits_in_native_word>() {
+            p.parse::<tok::fits_in_native_word>()?;
+            return Ok(Constraint::FitsInNativeWord);
+        }
         Err(p.error("expected a precondition constraint"))
     }
 }
@@ -619,6 +624,7 @@ mod test {
             ok {
                 "is-power-of-two",
                 "bit-width",
+                "fits-in-native-word",
             }
             err {
                 "",

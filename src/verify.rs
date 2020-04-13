@@ -723,6 +723,31 @@ fn type_constrain_precondition<'a>(
                 .into()),
             }
         }
+        Constraint::FitsInNativeWord => {
+            if pre.operands.len() != 1 {
+                return Err(WastError::new(
+                    pre.span,
+                    format!(
+                        "the `fits-in-native-word` precondition requires exactly 1 operand, found \
+                         {} operands",
+                        pre.operands.len(),
+                    ),
+                )
+                .into());
+            }
+
+            match pre.operands[0] {
+                ConstraintOperand::ValueLiteral(_) => {
+                    return Err(anyhow::anyhow!(
+                        "the `fits-in-native-word` precondition requires a constant or variable as \
+                         its first operand"
+                    )
+                    .into())
+                }
+                ConstraintOperand::Constant(Constant { .. })
+                | ConstraintOperand::Variable(Variable { .. }) => Ok(()),
+            }
+        }
     }
 }
 
@@ -932,5 +957,22 @@ mod tests {
 (=> (iadd $x $x) 0)
 (=> (iadd $x $y) 1)
 "
+    );
+
+    verify_ok!(
+        fits_in_native_word_0,
+        "(=> (when (iadd $x $y) (fits-in-native-word $x)) 0)"
+    );
+    verify_err!(
+        fits_in_native_word_1,
+        "(=> (when (iadd $x $y) (fits-in-native-word)) 0)"
+    );
+    verify_err!(
+        fits_in_native_word_2,
+        "(=> (when (iadd $x $y) (fits-in-native-word $x $y)) 0)"
+    );
+    verify_err!(
+        fits_in_native_word_3,
+        "(=> (when (iadd $x $y) (fits-in-native-word true)) 0)"
     );
 }

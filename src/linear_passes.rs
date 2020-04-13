@@ -138,6 +138,13 @@ fn compare_match_op_generality(
         (linear::MatchOp::BitWidth { .. }, _) => Ordering::Less,
         (_, linear::MatchOp::BitWidth { .. }) => Ordering::Greater,
 
+        (
+            linear::MatchOp::FitsInNativeWord { id: a },
+            linear::MatchOp::FitsInNativeWord { id: b },
+        ) => a.cmp(&b),
+        (linear::MatchOp::FitsInNativeWord { .. }, _) => Ordering::Less,
+        (_, linear::MatchOp::FitsInNativeWord { .. }) => Ordering::Greater,
+
         (linear::MatchOp::Nop, _) => Ordering::Greater,
     }
 }
