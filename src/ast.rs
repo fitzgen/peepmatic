@@ -70,6 +70,9 @@ pub enum DynAstRef<'a> {
     /// A reference to a `Boolean`.
     Boolean(&'a Boolean<'a>),
 
+    /// A reference to a `ConditionCode`.
+    ConditionCode(&'a ConditionCode<'a>),
+
     /// A reference to an `Unquote`.
     Unquote(&'a Unquote<'a>),
 
@@ -93,6 +96,7 @@ impl<'a, 'b> ChildNodes<'a, 'b> for DynAstRef<'a> {
             Self::Variable(x) => x.child_nodes(sink),
             Self::Integer(x) => x.child_nodes(sink),
             Self::Boolean(x) => x.child_nodes(sink),
+            Self::ConditionCode(x) => x.child_nodes(sink),
             Self::Unquote(x) => x.child_nodes(sink),
             Self::RhsOperation(x) => x.child_nodes(sink),
         }
@@ -218,6 +222,9 @@ pub enum ValueLiteral<'a> {
 
     /// A boolean value: `true` or `false`.
     Boolean(Boolean<'a>),
+
+    /// A condition code: `eq`, `ne`, etc...
+    ConditionCode(ConditionCode<'a>),
 }
 
 /// An integer literal.
@@ -246,6 +253,22 @@ pub struct Boolean<'a> {
     /// The boolean value.
     #[peepmatic(skip_child)]
     pub value: bool,
+
+    #[allow(missing_docs)]
+    #[peepmatic(skip_child)]
+    pub marker: PhantomData<&'a ()>,
+}
+
+/// A condition code.
+#[derive(Debug, Ast)]
+pub struct ConditionCode<'a> {
+    /// Where this `ConditionCode` was defined.
+    #[peepmatic(skip_child)]
+    pub span: wast::Span,
+
+    /// The actual condition code.
+    #[peepmatic(skip_child)]
+    pub cc: peepmatic_runtime::cc::ConditionCode,
 
     #[allow(missing_docs)]
     #[peepmatic(skip_child)]

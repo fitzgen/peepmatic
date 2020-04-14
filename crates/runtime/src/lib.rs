@@ -17,6 +17,7 @@
 #![deny(missing_docs)]
 #![deny(missing_debug_implementations)]
 
+pub mod cc;
 pub mod integer_interner;
 pub mod linear;
 pub mod operator;

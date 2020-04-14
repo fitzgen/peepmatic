@@ -55,6 +55,7 @@ use wast::{
 
 mod tok {
     use wast::{custom_keyword, custom_reserved};
+
     custom_keyword!(bit_width = "bit-width");
     custom_reserved!(dollar = "$");
     custom_keyword!(r#false = "false");
@@ -67,6 +68,19 @@ mod tok {
     custom_reserved!(right_curly = "}");
     custom_keyword!(r#true = "true");
     custom_keyword!(when);
+
+    custom_keyword!(eq);
+    custom_keyword!(ne);
+    custom_keyword!(slt);
+    custom_keyword!(ult);
+    custom_keyword!(sge);
+    custom_keyword!(uge);
+    custom_keyword!(sgt);
+    custom_keyword!(ugt);
+    custom_keyword!(sle);
+    custom_keyword!(ule);
+    custom_keyword!(of);
+    custom_keyword!(nof);
 }
 
 impl<'a> Parse<'a> for Optimizations<'a> {
@@ -163,13 +177,16 @@ impl<'a> Parse<'a> for ValueLiteral<'a> {
         if let Ok(i) = p.parse::<Integer>() {
             return Ok(ValueLiteral::Integer(i));
         }
-        Err(p.error("expected an integer or boolean literal"))
+        if let Ok(cc) = p.parse::<ConditionCode>() {
+            return Ok(ValueLiteral::ConditionCode(cc));
+        }
+        Err(p.error("expected an integer or boolean or condition code literal"))
     }
 }
 
 impl<'a> Peek for ValueLiteral<'a> {
     fn peek(c: Cursor) -> bool {
-        c.integer().is_some() || Boolean::peek(c)
+        c.integer().is_some() || Boolean::peek(c) || ConditionCode::peek(c)
     }
 
     fn display() -> &'static str {
@@ -230,6 +247,73 @@ impl<'a> Peek for Boolean<'a> {
 
     fn display() -> &'static str {
         "boolean `true` or `false`"
+    }
+}
+
+impl<'a> Parse<'a> for ConditionCode<'a> {
+    fn parse(p: Parser<'a>) -> ParseResult<Self> {
+        let span = p.cur_span();
+
+        macro_rules! parse_cc {
+            ( $( $token:ident => $cc:ident, )* ) => {
+                $(
+                    if p.peek::<tok::$token>() {
+                        p.parse::<tok::$token>()?;
+                        return Ok(Self {
+                            span,
+                            cc: peepmatic_runtime::cc::ConditionCode::$cc,
+                            marker: PhantomData,
+                        });
+                    }
+                )*
+            }
+        }
+
+        parse_cc! {
+            eq => Eq,
+            ne => Ne,
+            slt => Slt,
+            ult => Ult,
+            sge => Sge,
+            uge => Uge,
+            sgt => Sgt,
+            ugt => Ugt,
+            sle => Sle,
+            ule => Ule,
+            of => Of,
+            nof => Nof,
+        }
+
+        Err(p.error("expected a condition code"))
+    }
+}
+
+impl<'a> Peek for ConditionCode<'a> {
+    fn peek(c: Cursor) -> bool {
+        macro_rules! peek_cc {
+            ( $( $token:ident, )* ) => {
+                false $( || <tok::$token as Peek>::peek(c) )*
+            }
+        }
+
+        peek_cc! {
+            eq,
+            ne,
+            slt,
+            ult,
+            sge,
+            uge,
+            sgt,
+            ugt,
+            sle,
+            ule,
+            of,
+            nof,
+        }
+    }
+
+    fn display() -> &'static str {
+        "condition code"
     }
 }
 
@@ -553,6 +637,26 @@ mod test {
                 "falsezzz",
             }
         }
+        parse_cc<ConditionCode> {
+            ok {
+                "eq",
+                "ne",
+                "slt",
+                "ult",
+                "sge",
+                "uge",
+                "sgt",
+                "ugt",
+                "sle",
+                "ule",
+                "of",
+                "nof",
+            }
+            err {
+                "",
+                "neq",
+            }
+        }
         parse_constant<Constant> {
             ok {
                 "$C",
@@ -661,6 +765,7 @@ mod test {
                 "(iadd 1 2)",
                 "(iadd $x $C)",
                 "(iadd{i32} $x $y)",
+                "(icmp eq $x $y)",
             }
             err {
                 "",

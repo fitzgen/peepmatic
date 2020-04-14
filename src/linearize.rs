@@ -525,6 +525,9 @@ impl<'a> RhsBuilder<'a> {
             Rhs::ValueLiteral(ValueLiteral::Boolean(b)) => {
                 linear::Action::MakeBooleanConst { value: b.value }
             }
+            Rhs::ValueLiteral(ValueLiteral::ConditionCode(ConditionCode { cc, .. })) => {
+                linear::Action::MakeConditionCode { cc: *cc }
+            }
             Rhs::Variable(Variable { id, .. }) | Rhs::Constant(Constant { id, .. }) => {
                 linear::Action::GetLhsBinding {
                     id: lhs_canonicalizer.get(id),
@@ -555,6 +558,14 @@ impl<'a> RhsBuilder<'a> {
                     operands: [
                         self.get_rhs_id(&op.operands[0]),
                         self.get_rhs_id(&op.operands[1]),
+                    ],
+                },
+                3 => linear::Action::MakeTernaryInst {
+                    operator: op.operator,
+                    operands: [
+                        self.get_rhs_id(&op.operands[0]),
+                        self.get_rhs_id(&op.operands[1]),
+                        self.get_rhs_id(&op.operands[2]),
                     ],
                 },
                 n => unreachable!("no instructions of arity {}", n),
@@ -659,6 +670,9 @@ impl Pattern<'_> {
             ),
             Pattern::ValueLiteral(ValueLiteral::Boolean(Boolean { value, .. })) => {
                 (linear::MatchOp::BooleanValue { path }, Some(*value as u32))
+            }
+            Pattern::ValueLiteral(ValueLiteral::ConditionCode(ConditionCode { cc, .. })) => {
+                (linear::MatchOp::ConditionCode { path }, Some(*cc as u32))
             }
             Pattern::Constant(Constant { id, .. }) => {
                 if lhs_canonicalizer.is_in_scope(id)

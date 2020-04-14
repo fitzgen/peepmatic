@@ -16,16 +16,15 @@ pub fn derive_operator(input: TokenStream) -> TokenStream {
         Err(e) => return e.to_compile_error().into(),
     };
 
-    let num_operators = variants.len();
-
     let arity = match create_arity(&variants) {
         Ok(a) => a,
         Err(e) => return e.to_compile_error().into(),
     };
+
+    let num_operators = variants.len();
     let type_methods = create_type_methods(&variants);
-
     let parse_impl = create_parse_impl(&input.ident, &variants);
-
+    let display_impl = create_display_impl(&input.ident, &variants);
     let ident = &input.ident;
 
     let expanded = quote! {
@@ -39,6 +38,7 @@ pub fn derive_operator(input: TokenStream) -> TokenStream {
             }
         }
 
+        #display_impl
         #parse_impl
     };
 
@@ -267,6 +267,26 @@ fn create_parse_impl(ident: &syn::Ident, variants: &[OperatorVariant]) -> impl q
                 #( #parses )*
 
                 Err(p.error(#expected))
+            }
+        }
+    }
+}
+
+fn create_display_impl(ident: &syn::Ident, variants: &[OperatorVariant]) -> impl quote::ToTokens {
+    let displays = variants.iter().map(|v| {
+        let variant = &v.syn.ident;
+        let snake = snake_case(&v.syn.ident.to_string());
+        quote! {
+            Self::#variant => write!(f, #snake),
+        }
+    });
+
+    quote! {
+        impl std::fmt::Display for #ident {
+            fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                match self {
+                    #( #displays )*
+                }
             }
         }
     }

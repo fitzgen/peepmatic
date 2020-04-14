@@ -5,6 +5,7 @@
 //!
 //! See also `src/linearize.rs` for the AST to linear IR translation pass.
 
+use crate::cc::ConditionCode;
 use crate::integer_interner::{IntegerId, IntegerInterner};
 use crate::operator::{Operator, UnquoteOperator};
 use crate::paths::{PathId, PathInterner};
@@ -108,6 +109,12 @@ pub enum MatchOp {
         path: PathId,
     },
 
+    /// Switch on a condition code.
+    ConditionCode {
+        /// The path to the condition code.
+        path: PathId,
+    },
+
     /// No operation. Always evaluates to `None`.
     ///
     /// Exceedingly rare in real optimizations; nonetheless required to support
@@ -162,16 +169,22 @@ pub enum Action {
         operands: [RhsId; 2],
     },
 
-    /// Implicitly define the n^th built up RHS instruction by making an `iconst`.
+    /// Implicitly define the n^th RHS as an integer constant.
     MakeIntegerConst {
-        /// The constant integer value for the `iconst` instruction.
+        /// The constant integer value.
         value: IntegerId,
     },
 
-    /// Implicitly define the n^th RHS instruction by making a `bconst`.
+    /// Implicitly define the n^th RHS as a boolean constant.
     MakeBooleanConst {
-        /// The constant boolean value for the `bconst` instruction.
+        /// The constant boolean value.
         value: bool,
+    },
+
+    /// Implicitly defint the n^th RHS as a condition code.
+    MakeConditionCode {
+        /// The condition code.
+        cc: ConditionCode,
     },
 
     /// Implicitly define the n^th RHS instruction by making a unary
@@ -190,6 +203,15 @@ pub enum Action {
     MakeBinaryInst {
         /// The operands for this instruction.
         operands: [RhsId; 2],
+        /// The opcode for this instruction.
+        operator: Operator,
+    },
+
+    /// Implicitly define the n^th RHS instruction by making a ternary
+    /// instruction.
+    MakeTernaryInst {
+        /// The operands for this instruction.
+        operands: [RhsId; 3],
         /// The opcode for this instruction.
         operator: Operator,
     },

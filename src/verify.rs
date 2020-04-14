@@ -157,6 +157,7 @@ fn canonicalized_lhs_key(lhs: &Lhs) -> impl Hash + Eq {
             DynAstRef::ValueLiteral(_) => Other("ValueLiteral"),
             DynAstRef::Integer(i) => Integer(i.value),
             DynAstRef::Boolean(b) => Boolean(b.value),
+            DynAstRef::ConditionCode(cc) => ConditionCode(cc.cc),
             DynAstRef::PatternOperation(o) => Operation(o.operator),
             DynAstRef::Precondition(p) => Precondition(p.constraint),
             DynAstRef::ConstraintOperand(_) => Other("ConstraintOperand"),
@@ -182,6 +183,7 @@ fn canonicalized_lhs_key(lhs: &Lhs) -> impl Hash + Eq {
         Const(u32),
         Integer(i128),
         Boolean(bool),
+        ConditionCode(peepmatic_runtime::cc::ConditionCode),
         Operation(Operator),
         Precondition(Constraint),
         Other(&'static str),
@@ -210,6 +212,7 @@ impl<'a> TypingContext<'a> {
             .variant("int", &[])
             .variant("bool", &[])
             .variant("cpu_flags", &[])
+            .variant("cc", &[])
             .variant("void", &[])
             .finish("TypeKind");
         TypingContext {
@@ -323,8 +326,21 @@ impl<'a> TypingContext<'a> {
         ));
     }
 
+    fn assert_is_cc(&mut self, span: Span, ty: &TypeVar<'a>) {
+        let is_cc = self.type_kind_sort.variants[3]
+            .tester
+            .apply(&[&ty.kind.clone().into()])
+            .as_bool()
+            .unwrap();
+        self.constraints.push((
+            is_cc,
+            span,
+            Some("type error: expected condition code".into()),
+        ));
+    }
+
     fn assert_is_void(&mut self, span: Span, ty: &TypeVar<'a>) {
-        let is_void = self.type_kind_sort.variants[3]
+        let is_void = self.type_kind_sort.variants[4]
             .tester
             .apply(&[&ty.kind.clone().into()])
             .as_bool()
@@ -436,6 +452,23 @@ impl<'a> TypingContext<'a> {
 impl<'a> TypingContextTrait<'a> for TypingContext<'a> {
     type TypeVariable = TypeVar<'a>;
 
+    fn cc(&mut self, span: Span) -> TypeVar<'a> {
+        let ty = self.new_type_var();
+        self.assert_is_cc(span, &ty);
+        ty
+    }
+
+    fn bNN(&mut self, span: Span) -> TypeVar<'a> {
+        if let Some(ty) = self.operation_scope.get("bNN") {
+            return ty.clone();
+        }
+
+        let ty = self.new_type_var();
+        self.assert_is_bool(span, &ty);
+        self.operation_scope.insert("bNN", ty.clone());
+        ty
+    }
+
     fn iNN(&mut self, span: Span) -> TypeVar<'a> {
         if let Some(ty) = self.operation_scope.get("iNN") {
             return ty.clone();
@@ -482,6 +515,36 @@ impl<'a> TypingContextTrait<'a> for TypingContext<'a> {
         self.assert_is_void(span, &void);
         self.assert_bit_width(span, &void, 0);
         void
+    }
+
+    fn bool_or_int(&mut self, span: Span) -> TypeVar<'a> {
+        let ty = self.new_type_var();
+        let is_int = self.type_kind_sort.variants[0]
+            .tester
+            .apply(&[&ty.kind.clone().into()])
+            .as_bool()
+            .unwrap();
+        let is_bool = self.type_kind_sort.variants[1]
+            .tester
+            .apply(&[&ty.kind.clone().into()])
+            .as_bool()
+            .unwrap();
+        self.constraints.push((
+            is_int.or(&[&is_bool]),
+            span,
+            Some("type error: must be either an int or a bool type".into()),
+        ));
+        ty
+    }
+
+    fn any_t(&mut self, _span: Span) -> TypeVar<'a> {
+        if let Some(ty) = self.operation_scope.get("any_t") {
+            return ty.clone();
+        }
+
+        let ty = self.new_type_var();
+        self.operation_scope.insert("any_t", ty.clone());
+        ty
     }
 }
 

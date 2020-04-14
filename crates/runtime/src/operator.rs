@@ -6,6 +6,15 @@ use serde::{Deserialize, Serialize};
 /// An operator.
 ///
 /// These are a subset of Cranelift IR's operators.
+///
+/// ## Caveats for Branching and Trapping Operators
+///
+/// Branching operators are not fully modeled: we do not represent their label
+/// and jump arguments. It is up to the interpreter doing the instruction
+/// replacement to recognize when we are replacing one branch with another, and
+/// copy over the extra information.
+///
+/// Affected operations: `brz`, `brnz`, `trapz`, `trapnz`.
 #[derive(PeepmaticOperator, Clone, Copy, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 #[repr(u32)]
 pub enum Operator {
@@ -25,6 +34,10 @@ pub enum Operator {
     #[peepmatic(immediates(iNN), params(iNN), result(iNN))]
     BandImm,
 
+    /// `bint`
+    #[peepmatic(params(bNN), result(iNN))]
+    Bint,
+
     /// `bor`
     #[peepmatic(params(iNN, iNN), result(iNN))]
     Bor,
@@ -32,6 +45,14 @@ pub enum Operator {
     /// `bor_imm`
     #[peepmatic(immediates(iNN), params(iNN), result(iNN))]
     BorImm,
+
+    /// `brnz`
+    #[peepmatic(params(bool_or_int), result(void))]
+    Brnz,
+
+    /// `brz`
+    #[peepmatic(params(bool_or_int), result(void))]
+    Brz,
 
     /// `bxor`
     #[peepmatic(params(iNN, iNN), result(iNN))]
@@ -50,11 +71,11 @@ pub enum Operator {
     IaddImm,
 
     /// `icmp`
-    #[peepmatic(params(iNN, iNN), result(b1))]
+    #[peepmatic(immediates(cc), params(iNN, iNN), result(b1))]
     Icmp,
 
     /// `icmp_imm`
-    #[peepmatic(immediates(iNN), params(iNN), result(b1))]
+    #[peepmatic(immediates(cc, iNN), params(iNN), result(b1))]
     IcmpImm,
 
     /// `iconst`
@@ -62,11 +83,11 @@ pub enum Operator {
     Iconst,
 
     /// `ifcmp`
-    #[peepmatic(params(iNN, iNN), result(cpu_flags))]
+    #[peepmatic(immediates(cc), params(iNN, iNN), result(cpu_flags))]
     Ifcmp,
 
     /// `ifcmp_imm`
-    #[peepmatic(immediates(iNN), params(iNN), result(cpu_flags))]
+    #[peepmatic(immediates(cc, iNN), params(iNN), result(cpu_flags))]
     IfcmpImm,
 
     /// `imul`
@@ -121,6 +142,10 @@ pub enum Operator {
     #[peepmatic(immediates(iNN), params(iNN), result(iNN))]
     SdivImm,
 
+    /// `select`
+    #[peepmatic(params(bool_or_int, any_t, any_t), result(any_t))]
+    Select,
+
     /// `sextend`
     #[peepmatic(params(iNN), result(iMM))]
     Sextend,
@@ -140,6 +165,14 @@ pub enum Operator {
     /// `sshr_imm`
     #[peepmatic(immediates(iNN), params(iNN), result(iNN))]
     SshrImm,
+
+    /// `trapnz`
+    #[peepmatic(params(bool_or_int), result(void))]
+    Trapnz,
+
+    /// `trapz`
+    #[peepmatic(params(bool_or_int), result(void))]
+    Trapz,
 
     /// `udiv`
     #[peepmatic(params(iNN, iNN), result(iNN))]
@@ -216,6 +249,15 @@ pub trait TypingContext<'a> {
     /// A type variable.
     type TypeVariable;
 
+    /// Create a condition code type.
+    fn cc(&mut self, span: wast::Span) -> Self::TypeVariable;
+
+    /// Create a boolean type with a polymorphic bit width.
+    ///
+    /// Each use of `bNN` by the same operator refers to the same type variable.
+    #[allow(non_snake_case)]
+    fn bNN(&mut self, span: wast::Span) -> Self::TypeVariable;
+
     /// Create an integer type with a polymorphic bit width.
     ///
     /// Each use of `iNN` by the same operator refers to the same type variable.
@@ -237,4 +279,13 @@ pub trait TypingContext<'a> {
     /// Create the void type, used as the result of operators that branch away,
     /// or do not return anything.
     fn void(&mut self, span: wast::Span) -> Self::TypeVariable;
+
+    /// Create a type variable that may be either a boolean or an integer.
+    fn bool_or_int(&mut self, span: wast::Span) -> Self::TypeVariable;
+
+    /// Create a type variable that can be any type T.
+    ///
+    /// Each use of `any_t` by the same operator refers to the same type
+    /// variable.
+    fn any_t(&mut self, span: wast::Span) -> Self::TypeVariable;
 }

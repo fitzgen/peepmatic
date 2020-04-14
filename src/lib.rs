@@ -134,3 +134,13 @@ pub fn compile_str(
         automata,
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn compile_preopt() {
+        compile_file(Path::new("preopt.peepmatic")).unwrap();
+    }
+}

@@ -37,6 +37,7 @@ impl DotFmt<Option<u32>, linear::MatchOp, Vec<linear::Action>> for PeepholeDotFm
             Eq { id, path } => write!(w, "eq? $lhs{} @ {}", id.0, p(path))?,
             IntegerValue { path } => write!(w, "integer-value @ {}", p(path))?,
             BooleanValue { path } => write!(w, "boolean-value @ {}", p(path))?,
+            ConditionCode { path } => write!(w, "condition-code @ {}", p(path))?,
             Nop => write!(w, "nop")?,
         }
 
@@ -45,7 +46,6 @@ impl DotFmt<Option<u32>, linear::MatchOp, Vec<linear::Action>> for PeepholeDotFm
 
     fn fmt_output(&self, w: &mut impl Write, actions: &Vec<linear::Action>) -> io::Result<()> {
         use linear::Action::*;
-        use peepmatic_runtime::operator::{Operator, UnquoteOperator};
 
         if actions.is_empty() {
             return writeln!(w, "(none)");
@@ -54,105 +54,69 @@ impl DotFmt<Option<u32>, linear::MatchOp, Vec<linear::Action>> for PeepholeDotFm
         write!(w, r#"<font face="monospace">"#)?;
 
         let p = p(self.0);
+
+        let mut rhs_id = 0;
+        let mut next_rhs_id = || {
+            let id = rhs_id;
+            rhs_id += 1;
+            id
+        };
+
         for a in actions {
             match a {
-                BindLhs { id, path } => write!(w, "bind-lhs $lhs{} @ {}<br/>", id.0, p(path))?,
-                GetLhsBinding { id } => write!(w, "get-lhs-binding $lhs{}<br/>", id.0)?,
-                UnaryUnquote { operator, operand } => match operator {
-                    UnquoteOperator::Log2 => write!(w, "log2 $rhs{}<br/>", operand.0)?,
-                    UnquoteOperator::Neg => write!(w, "neg $rhs{}<br/>", operand.0)?,
-                    UnquoteOperator::Band
-                    | UnquoteOperator::Bor
-                    | UnquoteOperator::Bxor
-                    | UnquoteOperator::Iadd
-                    | UnquoteOperator::Imul => unreachable!("binary"),
-                },
-                BinaryUnquote { operator, operands } => match operator {
-                    UnquoteOperator::Band => {
-                        write!(w, "band $rhs{}, $rhs{}<br/>", operands[0].0, operands[1].0)?
-                    }
-                    UnquoteOperator::Bor => {
-                        write!(w, "bor $rhs{}, $rhs{}<br/>", operands[0].0, operands[1].0)?
-                    }
-                    UnquoteOperator::Bxor => {
-                        write!(w, "bxor $rhs{}, $rhs{}<br/>", operands[0].0, operands[1].0)?
-                    }
-                    UnquoteOperator::Iadd => {
-                        write!(w, "iadd $rhs{}, $rhs{}<br/>", operands[0].0, operands[1].0)?
-                    }
-                    UnquoteOperator::Imul => {
-                        write!(w, "imul $rhs{}, $rhs{}<br/>", operands[0].0, operands[1].0)?
-                    }
-                    UnquoteOperator::Log2 | UnquoteOperator::Neg => unreachable!("unary"),
-                },
-                MakeIntegerConst { value } => {
-                    write!(w, "make-iconst {}<br/>", self.1.lookup(*value))?
-                }
-                MakeBooleanConst { value } => write!(w, "make-bconst {}<br/>", value)?,
-                MakeUnaryInst {
-                    operand,
+                BindLhs { id, path } => write!(w, "$lhs{} = bind-lhs @ {}<br/>", id.0, p(path))?,
+                GetLhsBinding { id } => write!(
+                    w,
+                    "$rhs{} = get-lhs-binding $lhs{}<br/>",
+                    next_rhs_id(),
+                    id.0
+                )?,
+                UnaryUnquote { operator, operand } => write!(
+                    w,
+                    "$rhs{} = eval {} $rhs{}<br/>",
+                    next_rhs_id(),
                     operator,
-                    r#type,
-                } => match operator {
-                    Operator::Iconst => write!(w, "make-iconst $rhs{}<br/>", operand.0)?,
-                    Operator::Ireduce => write!(
-                        w,
-                        "make-ireduce {{{}}} $rhs{}<br/>",
-                        r#type.expect("ensured by validation"),
-                        operand.0
-                    )?,
-                    Operator::Sextend => write!(
-                        w,
-                        "make-sextend {{{}}} $rhs{}<br/>",
-                        r#type.expect("ensured by validation"),
-                        operand.0
-                    )?,
-                    Operator::Uextend => write!(
-                        w,
-                        "make-sextend {{{}}} $rhs{}<br/>",
-                        r#type.expect("ensured by validation"),
-                        operand.0
-                    )?,
-                    _ => unreachable!("not a unary operator: {:?}", operator),
-                },
-                MakeBinaryInst { operands, operator } => match operator {
-                    Operator::Bor => write!(
-                        w,
-                        "make-bor $rhs{}, $rhs{}<br/>",
-                        operands[0].0, operands[1].0
-                    )?,
-                    Operator::Iadd => write!(
-                        w,
-                        "make-iadd $rhs{}, $rhs{}<br/>",
-                        operands[0].0, operands[1].0
-                    )?,
-                    Operator::IaddImm => write!(
-                        w,
-                        "make-iadd-imm $rhs{}, $rhs{}<br/>",
-                        operands[0].0, operands[1].0
-                    )?,
-                    Operator::Imul => write!(
-                        w,
-                        "make-imul $rhs{}, $rhs{}<br/>",
-                        operands[0].0, operands[1].0
-                    )?,
-                    Operator::ImulImm => write!(
-                        w,
-                        "make-imul-imm $rhs{}, $rhs{}<br/>",
-                        operands[0].0, operands[1].0
-                    )?,
-                    Operator::Ishl => write!(
-                        w,
-                        "make-ishl $rhs{}, $rhs{}<br/>",
-                        operands[0].0, operands[1].0
-                    )?,
-                    Operator::Sshr => write!(
-                        w,
-                        "make-sshr $rhs{}, $rhs{}<br/>",
-                        operands[0].0, operands[1].0
-                    )?,
-                    _ => unreachable!("not a binary operator: {:?}", operator),
-                },
+                    operand.0
+                )?,
+                BinaryUnquote { operator, operands } => write!(
+                    w,
+                    "$rhs{} = eval {} $rhs{}, $rhs{}<br/>",
+                    next_rhs_id(),
+                    operator,
+                    operands[0].0,
+                    operands[1].0,
+                )?,
+                MakeIntegerConst { value } => {
+                    write!(w, "$rhs{} = {}<br/>", next_rhs_id(), self.1.lookup(*value))?
+                }
+                MakeBooleanConst { value } => write!(w, "$rhs{} = {}<br/>", next_rhs_id(), value)?,
+                MakeConditionCode { cc } => write!(w, "$rhs{} = {}<br/>", next_rhs_id(), cc)?,
+                MakeUnaryInst {
+                    operand, operator, ..
+                } => write!(
+                    w,
+                    "$rhs{} = make {} $rhs{}<br/>",
+                    next_rhs_id(),
+                    operator,
+                    operand.0,
+                )?,
+                MakeBinaryInst { operands, operator } => write!(
+                    w,
+                    "$rhs{} = make {} $rhs{}, $rhs{}<br/>",
+                    next_rhs_id(),
+                    operator,
+                    operands[0].0,
+                    operands[1].0,
+                )?,
+                MakeTernaryInst { operator, operands } => write!(
+                    w,
+                    "$rhs{} = make {} $rhs{}, $rhs{}, $rhs{}<br/>",
+                    next_rhs_id(),
+                    operator,
+                    operands[0].0,
+                    operands[1].0,
+                    operands[2].0,
+                )?,
             }
         }
 

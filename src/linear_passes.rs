@@ -109,6 +109,13 @@ fn compare_match_op_generality(
         (linear::MatchOp::BooleanValue { .. }, _) => Ordering::Less,
         (_, linear::MatchOp::BooleanValue { .. }) => Ordering::Greater,
 
+        (
+            linear::MatchOp::ConditionCode { path: a },
+            linear::MatchOp::ConditionCode { path: b },
+        ) => compare_paths(paths, a, b),
+        (linear::MatchOp::ConditionCode { .. }, _) => Ordering::Less,
+        (_, linear::MatchOp::ConditionCode { .. }) => Ordering::Greater,
+
         (linear::MatchOp::IsConst { path: a }, linear::MatchOp::IsConst { path: b }) => {
             compare_paths(paths, a, b)
         }
