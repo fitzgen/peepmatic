@@ -61,6 +61,13 @@ impl DotFmt<Option<u32>, linear::MatchOp, Vec<linear::Action>> for PeepholeDotFm
                 UnaryUnquote { operator, operand } => match operator {
                     UnquoteOperator::Log2 => write!(w, "log2 $rhs{}<br/>", operand.0)?,
                     UnquoteOperator::Neg => write!(w, "neg $rhs{}<br/>", operand.0)?,
+                    _ => unreachable!("not a unary unquote operator: {:?}", operator),
+                },
+                BinaryUnquote { operator, operands } => match operator {
+                    UnquoteOperator::Iadd => {
+                        write!(w, "iadd $rhs{}, $rhs{}<br/>", operands[0].0, operands[1].0)?
+                    }
+                    _ => unreachable!("not a binary unquote operator: {:?}", operator),
                 },
                 MakeIntegerConst { value } => {
                     write!(w, "make-iconst {}<br/>", self.1.lookup(*value))?

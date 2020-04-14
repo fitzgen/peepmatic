@@ -500,6 +500,13 @@ impl<'a> RhsBuilder<'a> {
                     operator: unq.operator,
                     operand: self.get_rhs_id(&unq.operands[0]),
                 },
+                2 => linear::Action::BinaryUnquote {
+                    operator: unq.operator,
+                    operands: [
+                        self.get_rhs_id(&unq.operands[0]),
+                        self.get_rhs_id(&unq.operands[1]),
+                    ],
+                },
                 n => unreachable!("no unquote operators of arity {}", n),
             },
             Rhs::Operation(op) => match op.operands.len() {

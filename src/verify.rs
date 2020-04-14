@@ -14,7 +14,7 @@
 
 use crate::ast::{Span as _, *};
 use crate::traversals::{Dfs, TraversalEvent};
-use peepmatic_runtime::operator::{Operator, TypingContext as TypingContextTrait, UnquoteOperator};
+use peepmatic_runtime::operator::{Operator, TypingContext as TypingContextTrait};
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::fmt;
@@ -640,78 +640,46 @@ fn collect_type_constraints<'a>(
                 expected_types.extend(operand_types);
             }
             (TE::Enter, DynAstRef::Unquote(unq)) => {
-                for op in &unq.operands {
-                    match op {
+                let result_ty;
+                let mut operand_types = vec![];
+                {
+                    let mut scope = context.enter_operation_scope();
+                    result_ty = unq.operator.result_type(&mut *scope, unq.span);
+                    unq.operator
+                        .immediate_types(&mut *scope, unq.span, &mut operand_types);
+                    unq.operator
+                        .param_types(&mut *scope, unq.span, &mut operand_types);
+                }
+
+                if unq.operands.len() != operand_types.len() {
+                    return Err(WastError::new(
+                        unq.span,
+                        format!(
+                            "Expected {} unquote operands but found {}",
+                            operand_types.len(),
+                            unq.operands.len()
+                        ),
+                    )
+                    .into());
+                }
+
+                for operand in &unq.operands {
+                    match operand {
                         Rhs::ValueLiteral(_) | Rhs::Constant(_) => continue,
-                        _ => {
+                        Rhs::Variable(_) | Rhs::Unquote(_) | Rhs::Operation(_) => {
                             return Err(WastError::new(
-                                op.span(),
-                                "unquoted $(...) operands must be value literals or constants"
-                                    .into(),
+                                operand.span(),
+                                "unquote operands must be value literals or constants".into(),
                             )
                             .into());
                         }
                     }
                 }
-                expected_types
-                    .extend(iter::repeat(context.new_type_var()).take(unq.operands.len()));
 
-                match unq.operator {
-                    UnquoteOperator::Log2 => {
-                        if unq.operands.len() != 1 {
-                            return Err(WastError::new(
-                                unq.span,
-                                format!(
-                                    "the `log2` unquote operatore requires exactly 1 operand, found {} \
-                                     operands",
-                                    unq.operands.len()
-                                ),
-                            )
-                                   .into());
-                        }
+                context.assert_type_eq(unq.span, expected_types.last().unwrap(), &result_ty, None);
 
-                        // The operand is an integer.
-                        context.assert_is_integer(
-                            unq.operands[0].span(),
-                            expected_types.last().unwrap(),
-                        );
-
-                        // And the result is the same type.
-                        context.assert_type_eq(
-                            unq.span,
-                            &expected_types[expected_types.len() - 2],
-                            &expected_types[expected_types.len() - 1],
-                            None,
-                        );
-                    }
-                    UnquoteOperator::Neg => {
-                        if unq.operands.len() != 1 {
-                            return Err(WastError::new(
-                                unq.span,
-                                format!(
-                                    "the `neg` unquote operatore requires exactly 1 operand, found {} \
-                                     operands",
-                                    unq.operands.len()
-                                ),
-                            )
-                            .into());
-                        }
-
-                        // The operand is an integer.
-                        context.assert_is_integer(
-                            unq.operands[0].span(),
-                            expected_types.last().unwrap(),
-                        );
-
-                        // And the result is the same type.
-                        context.assert_type_eq(
-                            unq.span,
-                            &expected_types[expected_types.len() - 2],
-                            &expected_types[expected_types.len() - 1],
-                            None,
-                        );
-                    }
-                }
+                operand_types.reverse();
+                expected_types.extend(operand_types);
             }
             (TE::Exit, DynAstRef::Rhs(..)) => {
                 expected_types.pop().unwrap();

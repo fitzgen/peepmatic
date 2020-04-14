@@ -148,8 +148,17 @@ pub enum Action {
     UnaryUnquote {
         /// The unquote operator.
         operator: UnquoteOperator,
-        /// The constant operand to the unquote.
+        /// The constant operand to this unquote.
         operand: RhsId,
+    },
+
+    /// Implicitly define the n^th RHS instruction as the result of the
+    /// compile-time evaluation off this unquote operation.
+    BinaryUnquote {
+        /// The unquote operator.
+        operator: UnquoteOperator,
+        /// The constant operands to this unquote.
+        operands: [RhsId; 2],
     },
 
     /// Implicitly define the n^th built up RHS instruction by making an `iconst`.

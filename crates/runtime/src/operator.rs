@@ -165,6 +165,26 @@ pub enum Operator {
 #[derive(PeepmaticOperator, Clone, Copy, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 #[repr(u32)]
 pub enum UnquoteOperator {
+    /// Compile-time `band` of two constant values.
+    #[peepmatic(params(iNN, iNN), result(iNN))]
+    Band,
+
+    /// Compile-time `bor` of two constant values.
+    #[peepmatic(params(iNN, iNN), result(iNN))]
+    Bor,
+
+    /// Compile-time `bxor` of two constant values.
+    #[peepmatic(params(iNN, iNN), result(iNN))]
+    Bxor,
+
+    /// Compile-time `iadd` of two constant values.
+    #[peepmatic(params(iNN, iNN), result(iNN))]
+    Iadd,
+
+    /// Compile-time `imul` of two constant values.
+    #[peepmatic(params(iNN, iNN), result(iNN))]
+    Imul,
+
     /// Take the base-2 log of a power of two integer.
     #[peepmatic(params(iNN), result(iNN))]
     Log2,
