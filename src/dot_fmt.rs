@@ -89,8 +89,30 @@ impl DotFmt<Option<u32>, linear::MatchOp, Vec<linear::Action>> for PeepholeDotFm
                     write!(w, "make-iconst {}<br/>", self.1.lookup(*value))?
                 }
                 MakeBooleanConst { value } => write!(w, "make-bconst {}<br/>", value)?,
-                MakeUnaryInst { operand, operator } => match operator {
+                MakeUnaryInst {
+                    operand,
+                    operator,
+                    r#type,
+                } => match operator {
                     Operator::Iconst => write!(w, "make-iconst $rhs{}<br/>", operand.0)?,
+                    Operator::Ireduce => write!(
+                        w,
+                        "make-ireduce {{{}}} $rhs{}<br/>",
+                        r#type.expect("ensured by validation"),
+                        operand.0
+                    )?,
+                    Operator::Sextend => write!(
+                        w,
+                        "make-sextend {{{}}} $rhs{}<br/>",
+                        r#type.expect("ensured by validation"),
+                        operand.0
+                    )?,
+                    Operator::Uextend => write!(
+                        w,
+                        "make-sextend {{{}}} $rhs{}<br/>",
+                        r#type.expect("ensured by validation"),
+                        operand.0
+                    )?,
                     _ => unreachable!("not a unary operator: {:?}", operator),
                 },
                 MakeBinaryInst { operands, operator } => match operator {

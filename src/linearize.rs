@@ -170,6 +170,28 @@ fn linearize_optimization(
         );
 
         increments.push(inc);
+
+        // Some operations require type ascriptions for us to infer the correct
+        // bit width of their results: `ireduce`, `sextend`, `uextend`, etc.
+        // When there is such a type ascription, insert another increment that
+        // checks the instruction-being-matched's bit width.
+        if let Pattern::Operation(Operation {
+            operator_type: Some(ty),
+            ..
+        }) = pattern
+        {
+            let id = lhs_canonicalizer.gensym();
+            increments
+                .last_mut()
+                .unwrap()
+                .actions
+                .push(linear::Action::BindLhs { id, path });
+            increments.push(linear::Increment {
+                operation: linear::MatchOp::BitWidth { id },
+                expected: Some(ty.bit_width() as u32),
+                actions: vec![],
+            });
+        }
     }
 
     // Now that we've added all the increments for the LHS pattern, add the
@@ -275,6 +297,7 @@ struct LhsCanonicalizer<'a> {
     // identifiers. By canonicalizing identifiers, we should be able to share
     // more states and transitions in the automata.
     canonical_lhs_ids: BTreeMap<&'a str, (linear::LhsId, PathId)>,
+    id_counter: u32,
 }
 
 impl<'a> LhsCanonicalizer<'a> {
@@ -282,6 +305,7 @@ impl<'a> LhsCanonicalizer<'a> {
     fn new() -> Self {
         Self {
             canonical_lhs_ids: Default::default(),
+            id_counter: 0,
         }
     }
 
@@ -308,6 +332,14 @@ impl<'a> LhsCanonicalizer<'a> {
     /// Panics if the given AST id has not already been canonicalized.
     fn first_occurrence(&self, id: &Id) -> PathId {
         self.canonical_lhs_ids[id.name()].1
+    }
+
+    /// Get a unique, canonical LHS id that is not associated with any AST id in
+    /// the DSL source text.
+    fn gensym(&mut self) -> linear::LhsId {
+        let id = linear::LhsId(self.id_counter);
+        self.id_counter += 1;
+        id
     }
 
     /// Canonicalize all the newly visible identifiers within the given pattern,
@@ -376,12 +408,15 @@ impl<'a> LhsCanonicalizer<'a> {
     /// Returns a pair of the canonicalized `linear::LhsId` and whether this is
     /// the first time we've seen the id and canonicalized it.
     fn canonicalize_id(&mut self, id: &Id<'a>, path: PathId) -> (linear::LhsId, bool) {
-        let new_id = linear::LhsId(self.canonical_lhs_ids.len() as u32);
+        let new_id = linear::LhsId(self.id_counter);
         let mut is_new = false;
         let (canonical, _) = *self.canonical_lhs_ids.entry(id.name()).or_insert_with(|| {
             is_new = true;
             (new_id, path)
         });
+        if is_new {
+            self.id_counter += 1;
+        }
         (canonical, is_new)
     }
 }
@@ -512,6 +547,7 @@ impl<'a> RhsBuilder<'a> {
             Rhs::Operation(op) => match op.operands.len() {
                 1 => linear::Action::MakeUnaryInst {
                     operator: op.operator,
+                    r#type: op.operator_type,
                     operand: self.get_rhs_id(&op.operands[0]),
                 },
                 2 => linear::Action::MakeBinaryInst {
@@ -844,6 +880,7 @@ mod tests {
                             },
                             linear::Action::MakeUnaryInst {
                                 operator: Operator::Iconst,
+                                r#type: None,
                                 operand: linear::RhsId(0),
                             },
                         ],
@@ -918,6 +955,39 @@ mod tests {
                     expected: Some(i(170141183460469231731687303715884105727).into()),
                     actions: vec![linear::Action::MakeIntegerConst { value: i(0) }],
                 }],
+            }
+        }
+    );
+
+    linearizes_to!(
+        ireduce_with_type_ascription,
+        "(=> (ireduce{i32} $x) 0)",
+        |p: &mut dyn FnMut(&[u8]) -> PathId, i: &mut dyn FnMut(i128) -> IntegerId| {
+            linear::Optimization {
+                increments: vec![
+                    linear::Increment {
+                        operation: linear::MatchOp::Opcode { path: p(&[0]) },
+                        expected: Some(Operator::Ireduce as _),
+                        actions: vec![
+                            linear::Action::BindLhs {
+                                id: linear::LhsId(0),
+                                path: p(&[0, 0]),
+                            },
+                            linear::Action::MakeIntegerConst { value: i(0) },
+                            linear::Action::BindLhs {
+                                id: linear::LhsId(1),
+                                path: p(&[0]),
+                            },
+                        ],
+                    },
+                    linear::Increment {
+                        operation: linear::MatchOp::BitWidth {
+                            id: linear::LhsId(1),
+                        },
+                        expected: Some(32),
+                        actions: vec![],
+                    },
+                ],
             }
         }
     );

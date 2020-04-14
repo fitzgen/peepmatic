@@ -21,7 +21,10 @@
 //!   `DynAstRef`, which is an `enum` of all the different kinds of AST nodes.
 
 use peepmatic_macro::Ast;
-use peepmatic_runtime::operator::{Operator, UnquoteOperator};
+use peepmatic_runtime::{
+    operator::{Operator, UnquoteOperator},
+    r#type::Type,
+};
 use std::marker::PhantomData;
 use wast::Id;
 
@@ -295,6 +298,10 @@ where
     /// The operator for this operation, e.g. `imul` or `iadd`.
     #[peepmatic(skip_child)]
     pub operator: Operator,
+
+    /// An optional ascribed type for the operator.
+    #[peepmatic(skip_child)]
+    pub operator_type: Option<Type>,
 
     /// This operation's operands.
     ///

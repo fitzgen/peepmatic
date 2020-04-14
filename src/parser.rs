@@ -23,7 +23,7 @@ The grammar for the DSL is given below:
 
 <boolean> ::= 'true' | 'false'
 
-<operation<T>> ::= '(' <operator> <T>* ')'
+<operation<T>> ::= '(' <operator> [<type-ascription>] <T>* ')'
 
 <precondition> ::= '(' <constraint> <constraint-operands>* ')'
 
@@ -46,6 +46,7 @@ The grammar for the DSL is given below:
  */
 
 use crate::ast::*;
+use peepmatic_runtime::r#type::Type;
 use std::marker::PhantomData;
 use wast::{
     parser::{Cursor, Parse, Parser, Peek, Result as ParseResult},
@@ -54,15 +55,16 @@ use wast::{
 
 mod tok {
     use wast::{custom_keyword, custom_reserved};
-
     custom_keyword!(bit_width = "bit-width");
     custom_reserved!(dollar = "$");
     custom_keyword!(r#false = "false");
     custom_keyword!(fits_in_native_word = "fits-in-native-word");
     custom_keyword!(is_power_of_two = "is-power-of-two");
+    custom_reserved!(left_curly = "{");
     custom_keyword!(log2);
     custom_keyword!(neg);
     custom_reserved!(replace = "=>");
+    custom_reserved!(right_curly = "}");
     custom_keyword!(r#true = "true");
     custom_keyword!(when);
 }
@@ -316,6 +318,16 @@ where
         let span = p.cur_span();
         p.parens(|p| {
             let operator = p.parse()?;
+
+            let operator_type = if p.peek::<tok::left_curly>() {
+                p.parse::<tok::left_curly>()?;
+                let ty = p.parse::<Type>()?;
+                p.parse::<tok::right_curly>()?;
+                Some(ty)
+            } else {
+                None
+            };
+
             let mut operands = vec![];
             while p.peek::<T>() {
                 operands.push(p.parse()?);
@@ -323,6 +335,7 @@ where
             Ok(Operation {
                 span,
                 operator,
+                operator_type,
                 operands,
                 marker: PhantomData,
             })
@@ -647,6 +660,7 @@ mod test {
                 "(iadd 1)",
                 "(iadd 1 2)",
                 "(iadd $x $C)",
+                "(iadd{i32} $x $y)",
             }
             err {
                 "",
@@ -686,6 +700,7 @@ mod test {
             err {
                 "",
                 "iadd.i32",
+                "iadd{i32}",
             }
         }
         parse_optimization<Optimization> {

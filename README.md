@@ -217,3 +217,12 @@ To constrain an optimization to only match `i32`s, for example, you can use the
           (bit-width $y 32))
     ...)
 ```
+
+Alternatively, you can ascribe a type to an operation by putting the type inside
+curly brackets after the operator, like this:
+
+```lisp
+(=> (when (sextend{i64} (ireduce{i32} $x))
+          (bit-width $x 64))
+    (sshr (ishl $x 32) 32))
+```

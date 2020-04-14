@@ -21,6 +21,7 @@ pub mod integer_interner;
 pub mod linear;
 pub mod operator;
 pub mod paths;
+pub mod r#type;
 
 use peepmatic_automata::Automata;
 use serde::{Deserialize, Serialize};

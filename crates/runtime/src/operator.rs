@@ -77,6 +77,10 @@ pub enum Operator {
     #[peepmatic(immediates(iNN), params(iNN), result(iNN))]
     ImulImm,
 
+    /// `ireduce`
+    #[peepmatic(params(iNN), result(iMM))]
+    Ireduce,
+
     /// `irsub_imm`
     #[peepmatic(immediates(iNN), params(iNN), result(iNN))]
     IrsubImm,
@@ -117,6 +121,10 @@ pub enum Operator {
     #[peepmatic(immediates(iNN), params(iNN), result(iNN))]
     SdivImm,
 
+    /// `sextend`
+    #[peepmatic(params(iNN), result(iMM))]
+    Sextend,
+
     /// `srem`
     #[peepmatic(params(iNN, iNN), result(iNN))]
     Srem,
@@ -140,6 +148,10 @@ pub enum Operator {
     /// `udiv_imm`
     #[peepmatic(immediates(iNN), params(iNN), result(iNN))]
     UdivImm,
+
+    /// `uextend`
+    #[peepmatic(params(iNN), result(iMM))]
+    Uextend,
 
     /// `urem`
     #[peepmatic(params(iNN, iNN), result(iNN))]
@@ -205,8 +217,16 @@ pub trait TypingContext<'a> {
     type TypeVariable;
 
     /// Create an integer type with a polymorphic bit width.
+    ///
+    /// Each use of `iNN` by the same operator refers to the same type variable.
     #[allow(non_snake_case)]
     fn iNN(&mut self, span: wast::Span) -> Self::TypeVariable;
+
+    /// Create an integer type with a polymorphic bit width.
+    ///
+    /// Each use of `iMM` by the same operator refers to the same type variable.
+    #[allow(non_snake_case)]
+    fn iMM(&mut self, span: wast::Span) -> Self::TypeVariable;
 
     /// Create the CPU flags type variable.
     fn cpu_flags(&mut self, span: wast::Span) -> Self::TypeVariable;

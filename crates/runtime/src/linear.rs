@@ -8,6 +8,7 @@
 use crate::integer_interner::{IntegerId, IntegerInterner};
 use crate::operator::{Operator, UnquoteOperator};
 use crate::paths::{PathId, PathInterner};
+use crate::r#type::Type;
 use serde::{Deserialize, Serialize};
 
 /// A set of linear optimizations.
@@ -178,6 +179,8 @@ pub enum Action {
     MakeUnaryInst {
         /// The operand for this instruction.
         operand: RhsId,
+        /// The ascribed type for this instruction.
+        r#type: Option<Type>,
         /// The operator for this instruction.
         operator: Operator,
     },

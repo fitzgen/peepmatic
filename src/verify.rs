@@ -191,7 +191,6 @@ fn canonicalized_lhs_key(lhs: &Lhs) -> impl Hash + Eq {
 pub(crate) struct TypingContext<'a> {
     z3: &'a z3::Context,
     type_kind_sort: z3::DatatypeSort<'a>,
-    type_width_sort: z3::DatatypeSort<'a>,
 
     // See the comments above `enter_operation_scope`.
     operation_scope: HashMap<&'static str, TypeVar<'a>>,
@@ -213,21 +212,11 @@ impl<'a> TypingContext<'a> {
             .variant("cpu_flags", &[])
             .variant("void", &[])
             .finish("TypeKind");
-        let type_width_sort = z3::DatatypeBuilder::new(z3)
-            .variant("1", &[])
-            .variant("8", &[])
-            .variant("16", &[])
-            .variant("32", &[])
-            .variant("64", &[])
-            .variant("128", &[])
-            .variant("0", &[]) // NB: only used by `void` kind.
-            .finish("TypeWidth");
         TypingContext {
             z3,
             operation_scope: Default::default(),
             id_to_type_var: Default::default(),
             type_kind_sort,
-            type_width_sort,
             constraints: vec![],
         }
     }
@@ -235,8 +224,7 @@ impl<'a> TypingContext<'a> {
     fn new_type_var(&self) -> TypeVar<'a> {
         let kind =
             z3::ast::Datatype::fresh_const(self.z3, "type-var-kind", &self.type_kind_sort.sort);
-        let width =
-            z3::ast::Datatype::fresh_const(self.z3, "type-var-width", &self.type_width_sort.sort);
+        let width = z3::ast::BV::fresh_const(self.z3, "type-var-width", 8);
         TypeVar { kind, width }
     }
 
@@ -346,25 +334,29 @@ impl<'a> TypingContext<'a> {
     }
 
     fn assert_bit_width(&mut self, span: Span, ty: &TypeVar<'a>, width: u8) {
-        let width_var = self.type_width_sort.variants[match width {
-            1 => 0,
-            8 => 1,
-            16 => 2,
-            32 => 3,
-            64 => 4,
-            128 => 5,
-            0 => 6,
-            w => panic!("unsupported bit width: {}", w),
-        }]
-        .constructor
-        .apply(&[])
-        .as_datatype()
-        .unwrap();
+        debug_assert!(width == 0 || width.is_power_of_two());
+        let width_var = z3::ast::BV::from_i64(self.z3, width as i64, 8);
         let is_width = width_var._eq(&ty.width);
         self.constraints.push((
             is_width,
             span,
             Some(format!("type error: expected bit width = {}", width).into()),
+        ));
+    }
+
+    fn assert_bit_width_lt(&mut self, span: Span, a: &TypeVar<'a>, b: &TypeVar<'a>) {
+        self.constraints.push((
+            a.width.bvult(&b.width),
+            span,
+            Some("type error: expected narrower bit width".into()),
+        ));
+    }
+
+    fn assert_bit_width_gt(&mut self, span: Span, a: &TypeVar<'a>, b: &TypeVar<'a>) {
+        self.constraints.push((
+            a.width.bvugt(&b.width),
+            span,
+            Some("type error: expected wider bit width".into()),
         ));
     }
 
@@ -455,6 +447,17 @@ impl<'a> TypingContextTrait<'a> for TypingContext<'a> {
         ty
     }
 
+    fn iMM(&mut self, span: Span) -> TypeVar<'a> {
+        if let Some(ty) = self.operation_scope.get("iMM") {
+            return ty.clone();
+        }
+
+        let ty = self.new_type_var();
+        self.assert_is_integer(span, &ty);
+        self.operation_scope.insert("iMM", ty.clone());
+        ty
+    }
+
     fn cpu_flags(&mut self, span: Span) -> TypeVar<'a> {
         if let Some(ty) = self.operation_scope.get("cpu_flags") {
             return ty.clone();
@@ -485,7 +488,7 @@ impl<'a> TypingContextTrait<'a> for TypingContext<'a> {
 #[derive(Clone)]
 pub(crate) struct TypeVar<'a> {
     kind: z3::ast::Datatype<'a>,
-    width: z3::ast::Datatype<'a>,
+    width: z3::ast::BV<'a>,
 }
 
 fn verify_optimization(z3: &z3::Context, opt: &Optimization) -> VerifyResult<()> {
@@ -569,6 +572,41 @@ fn collect_type_constraints<'a>(
                     .into());
                 }
 
+                match op.operator {
+                    Operator::Ireduce | Operator::Uextend | Operator::Sextend => {
+                        if op.operator_type.is_none() {
+                            return Err(WastError::new(
+                                op.span,
+                                "`ireduce`, `sextend`, and `uextend` require an ascribed type \
+                                 (like `sextend{i64}`)"
+                                    .into(),
+                            )
+                            .into());
+                        }
+                    }
+                    _ => {}
+                }
+
+                match op.operator {
+                    Operator::Uextend | Operator::Sextend => {
+                        context.assert_bit_width_gt(op.span, &result_ty, &operand_types[0]);
+                    }
+                    Operator::Ireduce => {
+                        context.assert_bit_width_lt(op.span, &result_ty, &operand_types[0]);
+                    }
+                    _ => {}
+                }
+
+                if let Some(ty) = op.operator_type {
+                    if ty.is_bool() {
+                        context.assert_is_bool(op.span, &result_ty);
+                    } else {
+                        debug_assert!(ty.is_int());
+                        context.assert_is_integer(op.span, &result_ty);
+                    }
+                    context.assert_bit_width(op.span, &result_ty, ty.bit_width());
+                }
+
                 context.assert_type_eq(op.span, expected_types.last().unwrap(), &result_ty, None);
 
                 operand_types.reverse();
@@ -632,6 +670,41 @@ fn collect_type_constraints<'a>(
                         ),
                     )
                     .into());
+                }
+
+                match op.operator {
+                    Operator::Ireduce | Operator::Uextend | Operator::Sextend => {
+                        if op.operator_type.is_none() {
+                            return Err(WastError::new(
+                                op.span,
+                                "`ireduce`, `sextend`, and `uextend` require an ascribed type \
+                                 (like `sextend{i64}`)"
+                                    .into(),
+                            )
+                            .into());
+                        }
+                    }
+                    _ => {}
+                }
+
+                match op.operator {
+                    Operator::Uextend | Operator::Sextend => {
+                        context.assert_bit_width_gt(op.span, &result_ty, &operand_types[0]);
+                    }
+                    Operator::Ireduce => {
+                        context.assert_bit_width_lt(op.span, &result_ty, &operand_types[0]);
+                    }
+                    _ => {}
+                }
+
+                if let Some(ty) = op.operator_type {
+                    if ty.is_bool() {
+                        context.assert_is_bool(op.span, &result_ty);
+                    } else {
+                        debug_assert!(ty.is_int());
+                        context.assert_is_integer(op.span, &result_ty);
+                    }
+                    context.assert_bit_width(op.span, &result_ty, ty.bit_width());
                 }
 
                 context.assert_type_eq(op.span, expected_types.last().unwrap(), &result_ty, None);
@@ -1031,4 +1104,13 @@ mod tests {
         fits_in_native_word_3,
         "(=> (when (iadd $x $y) (fits-in-native-word true)) 0)"
     );
+
+    verify_err!(reduce_extend_0, "(=> (sextend (ireduce -1)) 0)");
+    verify_err!(reduce_extend_1, "(=> (uextend (ireduce -1)) 0)");
+    verify_ok!(reduce_extend_2, "(=> (sextend{i64} (ireduce{i32} -1)) 0)");
+    verify_ok!(reduce_extend_3, "(=> (uextend{i64} (ireduce{i32} -1)) 0)");
+    verify_err!(reduce_extend_4, "(=> (sextend{i64} (ireduce{i64} -1)) 0)");
+    verify_err!(reduce_extend_5, "(=> (uextend{i64} (ireduce{i64} -1)) 0)");
+    verify_err!(reduce_extend_6, "(=> (sextend{i32} (ireduce{i64} -1)) 0)");
+    verify_err!(reduce_extend_7, "(=> (uextend{i32} (ireduce{i64} -1)) 0)");
 }
