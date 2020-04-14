@@ -61,13 +61,29 @@ impl DotFmt<Option<u32>, linear::MatchOp, Vec<linear::Action>> for PeepholeDotFm
                 UnaryUnquote { operator, operand } => match operator {
                     UnquoteOperator::Log2 => write!(w, "log2 $rhs{}<br/>", operand.0)?,
                     UnquoteOperator::Neg => write!(w, "neg $rhs{}<br/>", operand.0)?,
-                    _ => unreachable!("not a unary unquote operator: {:?}", operator),
+                    UnquoteOperator::Band
+                    | UnquoteOperator::Bor
+                    | UnquoteOperator::Bxor
+                    | UnquoteOperator::Iadd
+                    | UnquoteOperator::Imul => unreachable!("binary"),
                 },
                 BinaryUnquote { operator, operands } => match operator {
+                    UnquoteOperator::Band => {
+                        write!(w, "band $rhs{}, $rhs{}<br/>", operands[0].0, operands[1].0)?
+                    }
+                    UnquoteOperator::Bor => {
+                        write!(w, "bor $rhs{}, $rhs{}<br/>", operands[0].0, operands[1].0)?
+                    }
+                    UnquoteOperator::Bxor => {
+                        write!(w, "bxor $rhs{}, $rhs{}<br/>", operands[0].0, operands[1].0)?
+                    }
                     UnquoteOperator::Iadd => {
                         write!(w, "iadd $rhs{}, $rhs{}<br/>", operands[0].0, operands[1].0)?
                     }
-                    _ => unreachable!("not a binary unquote operator: {:?}", operator),
+                    UnquoteOperator::Imul => {
+                        write!(w, "imul $rhs{}, $rhs{}<br/>", operands[0].0, operands[1].0)?
+                    }
+                    UnquoteOperator::Log2 | UnquoteOperator::Neg => unreachable!("unary"),
                 },
                 MakeIntegerConst { value } => {
                     write!(w, "make-iconst {}<br/>", self.1.lookup(*value))?
