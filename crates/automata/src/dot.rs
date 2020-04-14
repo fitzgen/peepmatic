@@ -25,12 +25,18 @@ use std::path::Path;
 /// implement `Debug` or `Display`, or if you want to format them in some other
 /// way.
 pub trait DotFmt<TAlphabet, TState, TOutput> {
-    /// Format a single character from your automata's input alphabet.
+    /// Format a transition edge: `from ---input---> to`.
     ///
     /// This will be inside an [HTML
     /// label](https://www.graphviz.org/doc/info/shapes.html#html), so you may
     /// use balanced HTML tags.
-    fn fmt_alphabet(&self, w: &mut impl Write, character: &TAlphabet) -> io::Result<()>;
+    fn fmt_transition(
+        &self,
+        w: &mut impl Write,
+        from: Option<&TState>,
+        input: &TAlphabet,
+        to: Option<&TState>,
+    ) -> io::Result<()>;
 
     /// Format the custom data associated with a state.
     ///
@@ -130,8 +136,16 @@ where
                     from = from,
                     to = to.0,
                 )?;
-                formatter.fmt_alphabet(w, input)?;
-                write!(w, r#"</td></tr><tr><td cellpadding="5" align="left">Output:</td><td cellpadding="5" align="left">"#,)?;
+                formatter.fmt_transition(
+                    w,
+                    self.state_data[from].as_ref(),
+                    input,
+                    self.state_data[to.0 as usize].as_ref(),
+                )?;
+                write!(
+                    w,
+                    r#"</td></tr><tr><td cellpadding="5" align="left">Output:</td><td cellpadding="5" align="left">"#,
+                )?;
                 formatter.fmt_output(w, output)?;
                 writeln!(w, "</td></tr></table>>];")?;
             }
@@ -153,8 +167,14 @@ where
     TState: Debug,
     TOutput: Debug,
 {
-    fn fmt_alphabet(&self, w: &mut impl Write, alphabet: &TAlphabet) -> io::Result<()> {
-        write!(w, r#"<font face="monospace">{:?}</font>"#, alphabet)
+    fn fmt_transition(
+        &self,
+        w: &mut impl Write,
+        _from: Option<&TState>,
+        input: &TAlphabet,
+        _to: Option<&TState>,
+    ) -> io::Result<()> {
+        write!(w, r#"<font face="monospace">{:?}</font>"#, input)
     }
 
     fn fmt_state(&self, w: &mut impl Write, state: &TState) -> io::Result<()> {
@@ -177,8 +197,14 @@ where
     TState: Display,
     TOutput: Display,
 {
-    fn fmt_alphabet(&self, w: &mut impl Write, alphabet: &TAlphabet) -> io::Result<()> {
-        write!(w, "{}", alphabet)
+    fn fmt_transition(
+        &self,
+        w: &mut impl Write,
+        _from: Option<&TState>,
+        input: &TAlphabet,
+        _to: Option<&TState>,
+    ) -> io::Result<()> {
+        write!(w, "{}", input)
     }
 
     fn fmt_state(&self, w: &mut impl Write, state: &TState) -> io::Result<()> {

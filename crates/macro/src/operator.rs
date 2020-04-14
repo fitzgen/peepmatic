@@ -25,6 +25,7 @@ pub fn derive_operator(input: TokenStream) -> TokenStream {
     let type_methods = create_type_methods(&variants);
     let parse_impl = create_parse_impl(&input.ident, &variants);
     let display_impl = create_display_impl(&input.ident, &variants);
+    let try_from_u32_impl = create_try_from_u32_impl(&input.ident, &variants);
     let ident = &input.ident;
 
     let expanded = quote! {
@@ -39,6 +40,7 @@ pub fn derive_operator(input: TokenStream) -> TokenStream {
         }
 
         #display_impl
+        #try_from_u32_impl
         #parse_impl
     };
 
@@ -286,6 +288,33 @@ fn create_display_impl(ident: &syn::Ident, variants: &[OperatorVariant]) -> impl
             fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
                 match self {
                     #( #displays )*
+                }
+            }
+        }
+    }
+}
+
+fn create_try_from_u32_impl(
+    ident: &syn::Ident,
+    variants: &[OperatorVariant],
+) -> impl quote::ToTokens {
+    let matches = variants.iter().map(|v| {
+        let variant = &v.syn.ident;
+        quote! {
+            x if Self::#variant as u32 == x => Ok(Self::#variant),
+        }
+    });
+
+    let error_msg = format!("value is not an `{}`", ident);
+
+    quote! {
+        impl std::convert::TryFrom<u32> for #ident {
+            type Error = &'static str;
+
+            fn try_from(value: u32) -> Result<Self, Self::Error> {
+                match value {
+                    #( #matches )*
+                    _ => Err(#error_msg)
                 }
             }
         }

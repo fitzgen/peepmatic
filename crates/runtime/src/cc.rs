@@ -1,6 +1,7 @@
 //! Condition codes.
 
 use serde::{Deserialize, Serialize};
+use std::convert::TryFrom;
 use std::fmt;
 
 /// A condition code.
@@ -45,6 +46,28 @@ pub enum ConditionCode {
 
     /// No overflow.
     Nof,
+}
+
+impl TryFrom<u32> for ConditionCode {
+    type Error = &'static str;
+
+    fn try_from(x: u32) -> Result<Self, Self::Error> {
+        Ok(match x {
+            x if Self::Eq as u32 == x => Self::Eq,
+            x if Self::Ne as u32 == x => Self::Ne,
+            x if Self::Slt as u32 == x => Self::Slt,
+            x if Self::Ult as u32 == x => Self::Ult,
+            x if Self::Sge as u32 == x => Self::Sge,
+            x if Self::Uge as u32 == x => Self::Uge,
+            x if Self::Sgt as u32 == x => Self::Sgt,
+            x if Self::Ugt as u32 == x => Self::Ugt,
+            x if Self::Sle as u32 == x => Self::Sle,
+            x if Self::Ule as u32 == x => Self::Ule,
+            x if Self::Of as u32 == x => Self::Of,
+            x if Self::Nof as u32 == x => Self::Nof,
+            _ => return Err("not a valid condition code value"),
+        })
+    }
 }
 
 impl fmt::Display for ConditionCode {
