@@ -11,4 +11,11 @@ bumpalo = "3.2.0"
 peepmatic-automata = { version = "0.1.0", path = "../automata", features = ["serde"] }
 peepmatic-macro = { version = "0.1.0", path = "../macro" }
 serde = { version = "1.0.105", features = ["derive"] }
-wast = "13.0.0"
+wast = { version = "13.0.0", optional = true }
+
+
+[features]
+# Enable support for a few extra methods that are required by the `peepmatic`
+# crate when constructing peephole optimizers, but are not needed when simply
+# using already-constructed peephole optimizers.
+construct = ["wast"]

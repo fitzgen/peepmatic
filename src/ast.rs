@@ -21,7 +21,7 @@
 //!   `DynAstRef`, which is an `enum` of all the different kinds of AST nodes.
 
 use peepmatic_macro::Ast;
-use peepmatic_runtime::operator::Operator;
+use peepmatic_runtime::operator::{Operator, UnquoteOperator};
 use std::marker::PhantomData;
 use wast::Id;
 
@@ -415,24 +415,3 @@ pub struct Unquote<'a> {
     #[peepmatic(flatten)]
     pub operands: Vec<Rhs<'a>>,
 }
-
-/// Valid operators for compile-time unquote operations.
-#[derive(Debug)]
-pub enum UnquoteOperator {
-    /// Take the base-2 log of a power of two integer.
-    Log2,
-
-    /// Wrapping negation of an integer.
-    Neg,
-}
-
-// /// An operand for an unquote operation.
-// #[derive(Debug, Ast)]
-// pub enum UnquoteOperand<'a> {
-//     /// A value-literal operand.
-//     ValueLiteral(ValueLiteral<'a>),
-
-//     /// A constant operand. The constant must have been defined and matched in
-//     /// the left-hand side pattern.
-//     Constant(Constant<'a>),
-// }

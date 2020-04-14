@@ -6,7 +6,7 @@
 //! See also `src/linearize.rs` for the AST to linear IR translation pass.
 
 use crate::integer_interner::{IntegerId, IntegerInterner};
-use crate::operator::Operator;
+use crate::operator::{Operator, UnquoteOperator};
 use crate::paths::{PathId, PathInterner};
 use serde::{Deserialize, Serialize};
 
@@ -143,17 +143,12 @@ pub enum Action {
         id: LhsId,
     },
 
-    /// Implicitly define the n^th RHS instruction as the log2 of a right-hand
-    /// side value that is known to be a constant power of two.
-    Log2 {
-        /// The right-hand side operand.
-        operand: RhsId,
-    },
-
-    /// Implicitly define the n^th RHS instruction as the wrapping negation of a
-    /// right-hand side constant value.
-    Neg {
-        /// The right-hand side constant value.
+    /// Implicitly define the n^th RHS instruction as the result of the
+    /// compile-time evaluation off this unquote operation.
+    UnaryUnquote {
+        /// The unquote operator.
+        operator: UnquoteOperator,
+        /// The constant operand to the unquote.
         operand: RhsId,
     },
 

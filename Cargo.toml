@@ -10,7 +10,7 @@ edition = "2018"
 anyhow = "1.0.27"
 peepmatic-automata = { version = "0.1.0", path = "crates/automata", features = ["dot"] }
 peepmatic-macro = { version = "0.1.0", path = "crates/macro" }
-peepmatic-runtime = { version = "0.1.0", path = "crates/runtime" }
+peepmatic-runtime = { version = "0.1.0", path = "crates/runtime", features = ["construct"] }
 wast = "13.0.0"
 
 # Waiting on a new release.

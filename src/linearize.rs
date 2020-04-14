@@ -495,15 +495,12 @@ impl<'a> RhsBuilder<'a> {
                     id: lhs_canonicalizer.get(id),
                 }
             }
-            Rhs::Unquote(unq) => match unq.operator {
-                UnquoteOperator::Log2 => {
-                    let operand = self.get_rhs_id(&unq.operands[0]);
-                    linear::Action::Log2 { operand }
-                }
-                UnquoteOperator::Neg => {
-                    let operand = self.get_rhs_id(&unq.operands[0]);
-                    linear::Action::Neg { operand }
-                }
+            Rhs::Unquote(unq) => match unq.operands.len() {
+                1 => linear::Action::UnaryUnquote {
+                    operator: unq.operator,
+                    operand: self.get_rhs_id(&unq.operands[0]),
+                },
+                n => unreachable!("no unquote operators of arity {}", n),
             },
             Rhs::Operation(op) => match op.operands.len() {
                 1 => linear::Action::MakeUnaryInst {

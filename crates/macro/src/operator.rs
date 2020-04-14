@@ -11,8 +11,6 @@ use syn::{parse_macro_input, Result};
 pub fn derive_operator(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
 
-    assert_eq!(input.ident.to_string(), "Operator");
-
     let variants = match get_enum_variants(&input) {
         Ok(v) => v,
         Err(e) => return e.to_compile_error().into(),
@@ -26,10 +24,12 @@ pub fn derive_operator(input: TokenStream) -> TokenStream {
     };
     let type_methods = create_type_methods(&variants);
 
-    let parse_impl = create_parse_impl(&variants);
+    let parse_impl = create_parse_impl(&input.ident, &variants);
+
+    let ident = &input.ident;
 
     let expanded = quote! {
-        impl Operator {
+        impl #ident {
             #arity
             #type_methods
 
@@ -88,7 +88,7 @@ fn create_arity(variants: &[OperatorVariant]) -> Result<impl quote::ToTokens> {
         let imm_arity = imm_arity as u8;
 
         imm_arities.push(quote! {
-            Operator::#variant => #imm_arity,
+            Self::#variant => #imm_arity,
         });
 
         let params_arity = v.opts.params.len();
@@ -101,7 +101,7 @@ fn create_arity(variants: &[OperatorVariant]) -> Result<impl quote::ToTokens> {
         let params_arity = params_arity as u8;
 
         params_arities.push(quote! {
-            Operator::#variant => #params_arity,
+            Self::#variant => #params_arity,
         });
     }
 
@@ -137,7 +137,7 @@ fn create_type_methods(variants: &[OperatorVariant]) -> impl quote::ToTokens {
             )
         });
         result_types.push(quote! {
-            Operator::#variant => {
+            Self::#variant => {
                 context.#result_ty(span)
             }
         });
@@ -154,7 +154,7 @@ fn create_type_methods(variants: &[OperatorVariant]) -> impl quote::ToTokens {
             }
         };
         imm_types.push(quote! {
-            Operator::#variant => {
+            Self::#variant => {
                 #imm_tys
             }
         });
@@ -171,7 +171,7 @@ fn create_type_methods(variants: &[OperatorVariant]) -> impl quote::ToTokens {
             }
         };
         param_types.push(quote! {
-            Operator::#variant => {
+            Self::#variant => {
                 #param_tys
             }
         });
@@ -235,7 +235,7 @@ fn snake_case(s: &str) -> String {
     t
 }
 
-fn create_parse_impl(variants: &[OperatorVariant]) -> impl quote::ToTokens {
+fn create_parse_impl(ident: &syn::Ident, variants: &[OperatorVariant]) -> impl quote::ToTokens {
     let token_defs = variants.iter().map(|v| {
         let tok = snake_case(&v.syn.ident.to_string());
         let tok = Ident::new(&tok, Span::call_site());
@@ -251,23 +251,23 @@ fn create_parse_impl(variants: &[OperatorVariant]) -> impl quote::ToTokens {
         quote! {
             if p.peek::<#tok>() {
                 p.parse::<#tok>()?;
-                return Ok(Operator::#ident);
+                return Ok(Self::#ident);
             }
         }
     });
 
+    let expected = format!("expected {}", ident);
+
     quote! {
-        const _PARSE_IMPL_FOR_OPERATOR: () = {
-            #( #token_defs )*
+        #[cfg(feature = "construct")]
+        impl<'a> wast::parser::Parse<'a> for #ident {
+            fn parse(p: wast::parser::Parser<'a>) -> wast::parser::Result<Self> {
+                #( #token_defs )*
 
-            impl<'a> wast::parser::Parse<'a> for Operator {
-                fn parse(p: wast::parser::Parser<'a>) -> wast::parser::Result<Self> {
-                    #( #parses )*
-                    Err(p.error("expected operator"))
-                }
+                #( #parses )*
+
+                Err(p.error(#expected))
             }
-
-            ()
-        };
+        }
     }
 }

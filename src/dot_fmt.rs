@@ -45,7 +45,7 @@ impl DotFmt<Option<u32>, linear::MatchOp, Vec<linear::Action>> for PeepholeDotFm
 
     fn fmt_output(&self, w: &mut impl Write, actions: &Vec<linear::Action>) -> io::Result<()> {
         use linear::Action::*;
-        use peepmatic_runtime::operator::Operator;
+        use peepmatic_runtime::operator::{Operator, UnquoteOperator};
 
         if actions.is_empty() {
             return writeln!(w, "(none)");
@@ -58,8 +58,10 @@ impl DotFmt<Option<u32>, linear::MatchOp, Vec<linear::Action>> for PeepholeDotFm
             match a {
                 BindLhs { id, path } => write!(w, "bind-lhs $lhs{} @ {}<br/>", id.0, p(path))?,
                 GetLhsBinding { id } => write!(w, "get-lhs-binding $lhs{}<br/>", id.0)?,
-                Log2 { operand } => write!(w, "log2 $rhs{}<br/>", operand.0)?,
-                Neg { operand } => write!(w, "neg $rhs{}<br/>", operand.0)?,
+                UnaryUnquote { operator, operand } => match operator {
+                    UnquoteOperator::Log2 => write!(w, "log2 $rhs{}<br/>", operand.0)?,
+                    UnquoteOperator::Neg => write!(w, "neg $rhs{}<br/>", operand.0)?,
+                },
                 MakeIntegerConst { value } => {
                     write!(w, "make-iconst {}<br/>", self.1.lookup(*value))?
                 }

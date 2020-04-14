@@ -469,20 +469,6 @@ impl<'a> Peek for Unquote<'a> {
     }
 }
 
-impl<'a> Parse<'a> for UnquoteOperator {
-    fn parse(p: Parser<'a>) -> ParseResult<Self> {
-        if p.peek::<tok::log2>() {
-            p.parse::<tok::log2>()?;
-            return Ok(UnquoteOperator::Log2);
-        }
-        if p.peek::<tok::neg>() {
-            p.parse::<tok::neg>()?;
-            return Ok(UnquoteOperator::Neg);
-        }
-        Err(p.error("expected an operator for an unquote expression"))
-    }
-}
-
 #[cfg(test)]
 mod test {
     use super::*;

@@ -9,9 +9,17 @@ use serde::{Deserialize, Serialize};
 #[derive(PeepmaticOperator, Clone, Copy, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 #[repr(u32)]
 pub enum Operator {
+    /// `adjust_sp_down`
+    #[peepmatic(params(iNN), result(void))]
+    AdjustSpDown = 1,
+
+    /// `adjust_sp_down_imm`
+    #[peepmatic(immediates(iNN), result(void))]
+    AdjustSpDownImm,
+
     /// `band`
     #[peepmatic(params(iNN, iNN), result(iNN))]
-    Band = 1,
+    Band,
 
     /// `band_imm`
     #[peepmatic(immediates(iNN), params(iNN), result(iNN))]
@@ -41,9 +49,25 @@ pub enum Operator {
     #[peepmatic(immediates(iNN), params(iNN), result(iNN))]
     IaddImm,
 
+    /// `icmp`
+    #[peepmatic(params(iNN, iNN), result(b1))]
+    Icmp,
+
+    /// `icmp_imm`
+    #[peepmatic(immediates(iNN), params(iNN), result(b1))]
+    IcmpImm,
+
     /// `iconst`
     #[peepmatic(immediates(iNN), result(iNN))]
     Iconst,
+
+    /// `ifcmp`
+    #[peepmatic(params(iNN, iNN), result(cpu_flags))]
+    Ifcmp,
+
+    /// `ifcmp_imm`
+    #[peepmatic(immediates(iNN), params(iNN), result(cpu_flags))]
+    IfcmpImm,
 
     /// `imul`
     #[peepmatic(params(iNN, iNN), result(iNN))]
@@ -52,6 +76,10 @@ pub enum Operator {
     /// `imul_imm`
     #[peepmatic(immediates(iNN), params(iNN), result(iNN))]
     ImulImm,
+
+    /// `irsub_imm`
+    #[peepmatic(immediates(iNN), params(iNN), result(iNN))]
+    IrsubImm,
 
     /// `ishl`
     #[peepmatic(params(iNN, iNN), result(iNN))]
@@ -64,10 +92,6 @@ pub enum Operator {
     /// `isub`
     #[peepmatic(params(iNN, iNN), result(iNN))]
     Isub,
-
-    /// `isub_imm`
-    #[peepmatic(immediates(iNN), params(iNN), result(iNN))]
-    IsubImm,
 
     /// `rotl`
     #[peepmatic(params(iNN, iNN), result(iNN))]
@@ -134,12 +158,43 @@ pub enum Operator {
     UshrImm,
 }
 
-/// TODO FITZGEN
+/// Compile-time unquote operators.
+///
+/// These are used in the right-hand side to perform compile-time evaluation of
+/// constants matched on the left-hand side.
+#[derive(PeepmaticOperator, Clone, Copy, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
+#[repr(u32)]
+pub enum UnquoteOperator {
+    /// Take the base-2 log of a power of two integer.
+    #[peepmatic(params(iNN), result(iNN))]
+    Log2,
+
+    /// Wrapping negation of an integer.
+    #[peepmatic(params(iNN), result(iNN))]
+    Neg,
+}
+
+/// A trait to represent a typing context.
+///
+/// This is used by the macro-generated operator methods that create the type
+/// variables for their immediates, parameters, and results. This trait is
+/// implemented by the concrete typing context in `peepmatic/src/verify.rs`.
+#[cfg(feature = "construct")]
 pub trait TypingContext<'a> {
-    /// TODO FITZGEN
+    /// A type variable.
     type TypeVariable;
 
-    /// TODO FITZGEN
+    /// Create an integer type with a polymorphic bit width.
     #[allow(non_snake_case)]
     fn iNN(&mut self, span: wast::Span) -> Self::TypeVariable;
+
+    /// Create the CPU flags type variable.
+    fn cpu_flags(&mut self, span: wast::Span) -> Self::TypeVariable;
+
+    /// Create a boolean type of size one bit.
+    fn b1(&mut self, span: wast::Span) -> Self::TypeVariable;
+
+    /// Create the void type, used as the result of operators that branch away,
+    /// or do not return anything.
+    fn void(&mut self, span: wast::Span) -> Self::TypeVariable;
 }

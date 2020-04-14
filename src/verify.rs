@@ -14,7 +14,7 @@
 
 use crate::ast::{Span as _, *};
 use crate::traversals::{Dfs, TraversalEvent};
-use peepmatic_runtime::operator::{Operator, TypingContext as TypingContextTrait};
+use peepmatic_runtime::operator::{Operator, TypingContext as TypingContextTrait, UnquoteOperator};
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::fmt;
@@ -210,6 +210,8 @@ impl<'a> TypingContext<'a> {
         let type_kind_sort = z3::DatatypeBuilder::new(z3)
             .variant("int", &[])
             .variant("bool", &[])
+            .variant("cpu_flags", &[])
+            .variant("void", &[])
             .finish("TypeKind");
         let type_width_sort = z3::DatatypeBuilder::new(z3)
             .variant("1", &[])
@@ -218,6 +220,7 @@ impl<'a> TypingContext<'a> {
             .variant("32", &[])
             .variant("64", &[])
             .variant("128", &[])
+            .variant("0", &[]) // NB: only used by `void` kind.
             .finish("TypeWidth");
         TypingContext {
             z3,
@@ -319,6 +322,29 @@ impl<'a> TypingContext<'a> {
             .push((is_bool, span, Some("type error: expected bool".into())));
     }
 
+    fn assert_is_cpu_flags(&mut self, span: Span, ty: &TypeVar<'a>) {
+        let is_cpu_flags = self.type_kind_sort.variants[2]
+            .tester
+            .apply(&[&ty.kind.clone().into()])
+            .as_bool()
+            .unwrap();
+        self.constraints.push((
+            is_cpu_flags,
+            span,
+            Some("type error: expected CPU flags".into()),
+        ));
+    }
+
+    fn assert_is_void(&mut self, span: Span, ty: &TypeVar<'a>) {
+        let is_void = self.type_kind_sort.variants[3]
+            .tester
+            .apply(&[&ty.kind.clone().into()])
+            .as_bool()
+            .unwrap();
+        self.constraints
+            .push((is_void, span, Some("type error: expected void".into())));
+    }
+
     fn assert_bit_width(&mut self, span: Span, ty: &TypeVar<'a>, width: u8) {
         let width_var = self.type_width_sort.variants[match width {
             1 => 0,
@@ -327,6 +353,7 @@ impl<'a> TypingContext<'a> {
             32 => 3,
             64 => 4,
             128 => 5,
+            0 => 6,
             w => panic!("unsupported bit width: {}", w),
         }]
         .constructor
@@ -426,6 +453,32 @@ impl<'a> TypingContextTrait<'a> for TypingContext<'a> {
         self.assert_is_integer(span, &ty);
         self.operation_scope.insert("iNN", ty.clone());
         ty
+    }
+
+    fn cpu_flags(&mut self, span: Span) -> TypeVar<'a> {
+        if let Some(ty) = self.operation_scope.get("cpu_flags") {
+            return ty.clone();
+        }
+
+        let ty = self.new_type_var();
+        self.assert_is_cpu_flags(span, &ty);
+        self.assert_bit_width(span, &ty, 1);
+        self.operation_scope.insert("cpu_flags", ty.clone());
+        ty
+    }
+
+    fn b1(&mut self, span: Span) -> TypeVar<'a> {
+        let b1 = self.new_type_var();
+        self.assert_is_bool(span, &b1);
+        self.assert_bit_width(span, &b1, 1);
+        b1
+    }
+
+    fn void(&mut self, span: Span) -> TypeVar<'a> {
+        let void = self.new_type_var();
+        self.assert_is_void(span, &void);
+        self.assert_bit_width(span, &void, 0);
+        void
     }
 }
 
