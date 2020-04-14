@@ -49,6 +49,14 @@ pub enum Operator {
     #[peepmatic(immediates(iNN), params(iNN), result(iNN))]
     SdivImm,
 
+    /// `srem`
+    #[peepmatic(params(iNN, iNN), result(iNN))]
+    Srem,
+
+    /// `srem_imm`
+    #[peepmatic(immediates(iNN), params(iNN), result(iNN))]
+    SremImm,
+
     /// `sshr`
     #[peepmatic(params(iNN, iNN), result(iNN))]
     Sshr,
@@ -85,6 +93,8 @@ mod tok {
     custom_keyword!(isub);
     custom_keyword!(sdiv);
     custom_keyword!(sdiv_imm);
+    custom_keyword!(srem);
+    custom_keyword!(srem_imm);
     custom_keyword!(sshr);
     custom_keyword!(udiv);
     custom_keyword!(udiv_imm);
@@ -114,6 +124,8 @@ impl<'a> wast::parser::Parse<'a> for Operator {
             ishl => Ishl,
             sdiv => Sdiv,
             sdiv_imm => SdivImm,
+            srem => Srem,
+            srem_imm => SremImm,
             sshr => Sshr,
             udiv => Udiv,
             udiv_imm => UdivImm,
