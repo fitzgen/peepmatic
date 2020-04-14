@@ -150,6 +150,13 @@ pub enum Action {
         operand: RhsId,
     },
 
+    /// Implicitly define the n^th RHS instruction as the wrapping negation of a
+    /// right-hand side constant value.
+    Neg {
+        /// The right-hand side constant value.
+        operand: RhsId,
+    },
+
     /// Implicitly define the n^th built up RHS instruction by making an `iconst`.
     MakeIntegerConst {
         /// The constant integer value for the `iconst` instruction.

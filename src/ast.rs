@@ -421,6 +421,9 @@ pub struct Unquote<'a> {
 pub enum UnquoteOperator {
     /// Take the base-2 log of a power of two integer.
     Log2,
+
+    /// Wrapping negation of an integer.
+    Neg,
 }
 
 // /// An operand for an unquote operation.

@@ -631,6 +631,33 @@ fn collect_type_constraints<'a>(
                             None,
                         );
                     }
+                    UnquoteOperator::Neg => {
+                        if unq.operands.len() != 1 {
+                            return Err(WastError::new(
+                                unq.span,
+                                format!(
+                                    "the `neg` unquote operatore requires exactly 1 operand, found {} \
+                                     operands",
+                                    unq.operands.len()
+                                ),
+                            )
+                            .into());
+                        }
+
+                        // The operand is an integer.
+                        context.assert_is_integer(
+                            unq.operands[0].span(),
+                            expected_types.last().unwrap(),
+                        );
+
+                        // And the result is the same type.
+                        context.assert_type_eq(
+                            unq.span,
+                            &expected_types[expected_types.len() - 2],
+                            &expected_types[expected_types.len() - 1],
+                            None,
+                        );
+                    }
                 }
             }
             (TE::Exit, DynAstRef::Rhs(..)) => {
@@ -912,6 +939,10 @@ mod tests {
     verify_ok!(unquote_0, "(=> $C $(log2 $C))");
     verify_err!(unquote_1, "(=> (iadd $C $D) $(log2 $C $D))");
     verify_err!(unquote_2, "(=> $x $(log2))");
+    verify_ok!(unquote_3, "(=> $C $(neg $C))");
+    verify_err!(unquote_4, "(=> $x $(neg))");
+    verify_err!(unquote_5, "(=> (iadd $x $y) $(neg $x $y))");
+    verify_err!(unquote_6, "(=> $x $(neg $x))");
 
     verify_ok!(rhs_0, "(=> $x (iadd $x (iconst 0)))");
     verify_err!(rhs_1, "(=> $x (iadd $x))");

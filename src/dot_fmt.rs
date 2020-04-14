@@ -59,6 +59,7 @@ impl DotFmt<Option<u32>, linear::MatchOp, Vec<linear::Action>> for PeepholeDotFm
                 BindLhs { id, path } => write!(w, "bind-lhs $lhs{} @ {}<br/>", id.0, p(path))?,
                 GetLhsBinding { id } => write!(w, "get-lhs-binding $lhs{}<br/>", id.0)?,
                 Log2 { operand } => write!(w, "log2 $rhs{}<br/>", operand.0)?,
+                Neg { operand } => write!(w, "neg $rhs{}<br/>", operand.0)?,
                 MakeIntegerConst { value } => {
                     write!(w, "make-iconst {}<br/>", self.1.lookup(*value))?
                 }

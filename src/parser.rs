@@ -61,6 +61,7 @@ mod tok {
     custom_keyword!(fits_in_native_word = "fits-in-native-word");
     custom_keyword!(is_power_of_two = "is-power-of-two");
     custom_keyword!(log2);
+    custom_keyword!(neg);
     custom_reserved!(replace = "=>");
     custom_keyword!(r#true = "true");
     custom_keyword!(when);
@@ -474,6 +475,10 @@ impl<'a> Parse<'a> for UnquoteOperator {
             p.parse::<tok::log2>()?;
             return Ok(UnquoteOperator::Log2);
         }
+        if p.peek::<tok::neg>() {
+            p.parse::<tok::neg>()?;
+            return Ok(UnquoteOperator::Neg);
+        }
         Err(p.error("expected an operator for an unquote expression"))
     }
 }
@@ -774,6 +779,9 @@ mod test {
                 "$(log2)",
                 "$(log2 $C)",
                 "$(log2 $C1 1)",
+                "$(neg)",
+                "$(neg $C)",
+                "$(neg $C 1)",
             }
             err {
                 "",
