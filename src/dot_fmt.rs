@@ -68,11 +68,6 @@ impl DotFmt<Option<u32>, linear::MatchOp, Vec<linear::Action>> for PeepholeDotFm
                     _ => unreachable!("not a unary operator: {:?}", operator),
                 },
                 MakeBinaryInst { operands, operator } => match operator {
-                    Operator::Ashr => write!(
-                        w,
-                        "make-ashr $rhs{}, $rhs{}<br/>",
-                        operands[0].0, operands[1].0
-                    )?,
                     Operator::Bor => write!(
                         w,
                         "make-bor $rhs{}, $rhs{}<br/>",

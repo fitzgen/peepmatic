@@ -681,7 +681,6 @@ mod test {
         }
         parse_operator<Operator> {
             ok {
-                "ashr",
                 "bor",
                 "iadd",
                 "iadd_imm",
