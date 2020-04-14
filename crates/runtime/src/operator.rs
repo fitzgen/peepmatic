@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 ///
 /// These are a subset of Cranelift IR's operators.
 #[derive(PeepmaticOperator, Clone, Copy, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
-#[repr(u8)]
+#[repr(u32)]
 pub enum Operator {
     /// `ashr`
     #[peepmatic(params(iNN, iNN), result(iNN))]
@@ -41,6 +41,10 @@ pub enum Operator {
     #[peepmatic(params(iNN, iNN), result(iNN))]
     Ishl,
 
+    /// `sdiv`
+    #[peepmatic(params(iNN, iNN), result(iNN))]
+    Sdiv,
+
     /// `sshr`
     #[peepmatic(params(iNN, iNN), result(iNN))]
     Sshr,
@@ -67,47 +71,36 @@ mod tok {
     custom_keyword!(imul_imm);
     custom_keyword!(ishl);
     custom_keyword!(isub);
+    custom_keyword!(sdiv);
     custom_keyword!(sshr);
 }
 
 impl<'a> wast::parser::Parse<'a> for Operator {
     fn parse(p: wast::parser::Parser<'a>) -> wast::parser::Result<Self> {
-        if p.peek::<tok::ashr>() {
-            p.parse::<tok::ashr>()?;
-            return Ok(Operator::Ashr);
+        macro_rules! parse {
+            ( $( $tok:ident => $variant:ident , )* ) => {
+                $(
+                    if p.peek::<tok::$tok>() {
+                        p.parse::<tok::$tok>()?;
+                        return Ok(Operator::$variant);
+                    }
+                )*
+            }
         }
-        if p.peek::<tok::bor>() {
-            p.parse::<tok::bor>()?;
-            return Ok(Operator::Bor);
-        }
-        if p.peek::<tok::iadd>() {
-            p.parse::<tok::iadd>()?;
-            return Ok(Operator::Iadd);
-        }
-        if p.peek::<tok::iadd_imm>() {
-            p.parse::<tok::iadd_imm>()?;
-            return Ok(Operator::IaddImm);
-        }
-        if p.peek::<tok::iconst>() {
-            p.parse::<tok::iconst>()?;
-            return Ok(Operator::Iconst);
-        }
-        if p.peek::<tok::imul>() {
-            p.parse::<tok::imul>()?;
-            return Ok(Operator::Imul);
-        }
-        if p.peek::<tok::imul_imm>() {
-            p.parse::<tok::imul_imm>()?;
-            return Ok(Operator::ImulImm);
-        }
-        if p.peek::<tok::ishl>() {
-            p.parse::<tok::ishl>()?;
-            return Ok(Operator::Ishl);
-        }
-        if p.peek::<tok::sshr>() {
-            p.parse::<tok::sshr>()?;
-            return Ok(Operator::Sshr);
-        }
+
+        parse!(
+            ashr => Ashr,
+            bor => Bor,
+            iadd => Iadd,
+            iadd_imm => IaddImm,
+            iconst => Iconst,
+            imul => Imul,
+            imul_imm => ImulImm,
+            ishl => Ishl,
+            sdiv => Sdiv,
+            sshr => Sshr,
+        );
+
         Err(p.error("expected operator"))
     }
 }

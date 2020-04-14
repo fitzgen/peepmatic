@@ -401,7 +401,7 @@ mod tests {
     use super::*;
     use crate::ast::*;
     use linear::{LhsId, MatchOp::*};
-    use peepmatic_runtime::paths::*;
+    use peepmatic_runtime::{operator::Operator, paths::*};
 
     macro_rules! sorts_to {
         ($test_name:ident, $source:expr, $make_expected:expr) => {
@@ -468,29 +468,29 @@ mod tests {
 ",
         |p: &mut dyn FnMut(&[u8]) -> PathId, i: &mut dyn FnMut(i128) -> Option<u32>| vec![
             vec![
-                (Opcode { path: p(&[0]) }, Some(2)),
-                (Opcode { path: p(&[0, 1]) }, Some(2))
+                (Opcode { path: p(&[0]) }, Some(Operator::Iadd as _)),
+                (Opcode { path: p(&[0, 1]) }, Some(Operator::Iadd as _))
             ],
             vec![
-                (Opcode { path: p(&[0]) }, Some(2)),
+                (Opcode { path: p(&[0]) }, Some(Operator::Iadd as _)),
                 (IntegerValue { path: p(&[0, 1]) }, i(42))
             ],
             vec![
-                (Opcode { path: p(&[0]) }, Some(2)),
+                (Opcode { path: p(&[0]) }, Some(Operator::Iadd as _)),
                 (IsConst { path: p(&[0, 1]) }, Some(1)),
                 (IsPowerOfTwo { id: LhsId(1) }, Some(1))
             ],
             vec![
-                (Opcode { path: p(&[0]) }, Some(2)),
+                (Opcode { path: p(&[0]) }, Some(Operator::Iadd as _)),
                 (IsConst { path: p(&[0, 1]) }, Some(1)),
                 (BitWidth { id: LhsId(0) }, Some(32))
             ],
             vec![
-                (Opcode { path: p(&[0]) }, Some(2)),
+                (Opcode { path: p(&[0]) }, Some(Operator::Iadd as _)),
                 (IsConst { path: p(&[0, 1]) }, Some(1))
             ],
             vec![
-                (Opcode { path: p(&[0]) }, Some(2)),
+                (Opcode { path: p(&[0]) }, Some(Operator::Iadd as _)),
                 (
                     Eq {
                         id: LhsId(0),
@@ -499,7 +499,7 @@ mod tests {
                     Some(1)
                 )
             ],
-            vec![(Opcode { path: p(&[0]) }, Some(2))],
+            vec![(Opcode { path: p(&[0]) }, Some(Operator::Iadd as _))],
             vec![(Nop, None)]
         ]
     );
@@ -567,18 +567,18 @@ mod tests {
 ",
         |p: &mut dyn FnMut(&[u8]) -> PathId, i: &mut dyn FnMut(i128) -> Option<u32>| vec![
             vec![
-                (Opcode { path: p(&[0]) }, Some(2)),
-                (Opcode { path: p(&[0, 1]) }, Some(2)),
+                (Opcode { path: p(&[0]) }, Some(Operator::Iadd as _)),
+                (Opcode { path: p(&[0, 1]) }, Some(Operator::Iadd as _)),
                 (
                     Opcode {
                         path: p(&[0, 1, 1]),
                     },
-                    Some(2)
+                    Some(Operator::Iadd as _)
                 ),
             ],
             vec![
-                (Opcode { path: p(&[0]) }, Some(2)),
-                (Opcode { path: p(&[0, 1]) }, Some(2)),
+                (Opcode { path: p(&[0]) }, Some(Operator::Iadd as _)),
+                (Opcode { path: p(&[0, 1]) }, Some(Operator::Iadd as _)),
                 (
                     Opcode {
                         path: p(&[0, 1, 1])
@@ -588,7 +588,7 @@ mod tests {
                 (IsConst { path: p(&[0, 1]) }, Some(1)),
             ],
             vec![
-                (Opcode { path: p(&[0]) }, Some(2)),
+                (Opcode { path: p(&[0]) }, Some(Operator::Iadd as _)),
                 (Opcode { path: p(&[0, 1]) }, None),
                 (IsConst { path: p(&[0, 1]) }, Some(1)),
             ],
@@ -607,27 +607,27 @@ mod tests {
 ",
         |p: &mut dyn FnMut(&[u8]) -> PathId, i: &mut dyn FnMut(i128) -> Option<u32>| vec![
             vec![
-                (Opcode { path: p(&[0]) }, Some(5)),
+                (Opcode { path: p(&[0]) }, Some(Operator::Imul as _)),
                 (IntegerValue { path: p(&[0, 0]) }, i(2))
             ],
             vec![
-                (Opcode { path: p(&[0]) }, Some(5)),
+                (Opcode { path: p(&[0]) }, Some(Operator::Imul as _)),
                 (IntegerValue { path: p(&[0, 0]) }, i(1)),
             ],
             vec![
-                (Opcode { path: p(&[0]) }, Some(5)),
+                (Opcode { path: p(&[0]) }, Some(Operator::Imul as _)),
                 (IntegerValue { path: p(&[0, 1]) }, i(2))
             ],
             vec![
-                (Opcode { path: p(&[0]) }, Some(5)),
+                (Opcode { path: p(&[0]) }, Some(Operator::Imul as _)),
                 (IntegerValue { path: p(&[0, 1]) }, i(1)),
             ],
             vec![
-                (Opcode { path: p(&[0]) }, Some(2)),
+                (Opcode { path: p(&[0]) }, Some(Operator::Iadd as _)),
                 (IntegerValue { path: p(&[0, 0]) }, i(0)),
             ],
             vec![
-                (Opcode { path: p(&[0]) }, Some(2)),
+                (Opcode { path: p(&[0]) }, Some(Operator::Iadd as _)),
                 (IntegerValue { path: p(&[0, 1]) }, i(0)),
             ],
         ]
@@ -661,20 +661,20 @@ mod tests {
 ",
         |p: &mut dyn FnMut(&[u8]) -> PathId, i: &mut dyn FnMut(i128) -> Option<u32>| vec![
             vec![
-                (Opcode { path: p(&[0]) }, Some(2)),
+                (Opcode { path: p(&[0]) }, Some(Operator::Iadd as _)),
                 (IntegerValue { path: p(&[0, 0]) }, i(666)),
-                (Opcode { path: p(&[0, 1]) }, Some(2)),
+                (Opcode { path: p(&[0, 1]) }, Some(Operator::Iadd as _)),
                 (
                     Opcode {
                         path: p(&[0, 1, 1])
                     },
-                    Some(2)
+                    Some(Operator::Iadd as _)
                 )
             ],
             // Note: no fallbacks inserted here because they branch on different
             // integer values.
             vec![
-                (Opcode { path: p(&[0]) }, Some(2)),
+                (Opcode { path: p(&[0]) }, Some(Operator::Iadd as _)),
                 (IntegerValue { path: p(&[0, 0]) }, i(999)),
                 (IsConst { path: p(&[0, 1]) }, Some(1))
             ],

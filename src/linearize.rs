@@ -99,7 +99,6 @@ use crate::traversals::Dfs;
 use peepmatic_runtime::{
     integer_interner::IntegerInterner,
     linear,
-    operator::Operator,
     paths::{Path, PathId, PathInterner},
 };
 use std::collections::BTreeMap;
@@ -637,25 +636,7 @@ impl Pattern<'_> {
                     (linear::MatchOp::Nop, None)
                 }
             }
-            Pattern::Operation(op) => (
-                linear::MatchOp::Opcode { path },
-                // TODO: Ideally, this would match the value of
-                // `cranelift_codegen::ir::instructions::Opcode` (assuming that
-                // becomes a C-style `enum`). This would allow the matcher to
-                // avoid an extra switch-and-translate, and instead use the
-                // opcode as the lookup key for the transition directly.
-                Some(match op.operator {
-                    Operator::Ashr => 0,
-                    Operator::Bor => 1,
-                    Operator::Iadd => 2,
-                    Operator::IaddImm => 3,
-                    Operator::Iconst => 4,
-                    Operator::Imul => 5,
-                    Operator::ImulImm => 6,
-                    Operator::Ishl => 7,
-                    Operator::Sshr => 8,
-                }),
-            ),
+            Pattern::Operation(op) => (linear::MatchOp::Opcode { path }, Some(op.operator as u32)),
         }
     }
 }
@@ -663,7 +644,7 @@ impl Pattern<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use peepmatic_runtime::integer_interner::IntegerId;
+    use peepmatic_runtime::{integer_interner::IntegerId, operator::Operator};
 
     macro_rules! linearizes_to {
         ($name:ident, $source:expr, $make_expected:expr $(,)* ) => {
@@ -725,7 +706,7 @@ mod tests {
                 increments: vec![
                     linear::Increment {
                         operation: linear::MatchOp::Opcode { path: p(&[0]) },
-                        expected: Some(5),
+                        expected: Some(Operator::Imul as _),
                         actions: vec![
                             linear::Action::BindLhs {
                                 id: linear::LhsId(0),
@@ -844,7 +825,7 @@ mod tests {
                 increments: vec![
                     linear::Increment {
                         operation: linear::MatchOp::Opcode { path: p(&[0]) },
-                        expected: Some(4),
+                        expected: Some(Operator::Iconst as _),
                         actions: vec![
                             linear::Action::BindLhs {
                                 id: linear::LhsId(0),
@@ -877,7 +858,7 @@ mod tests {
                 increments: vec![
                     linear::Increment {
                         operation: linear::MatchOp::Opcode { path: p(&[0]) },
-                        expected: Some(1),
+                        expected: Some(Operator::Bor as _),
                         actions: vec![
                             linear::Action::BindLhs {
                                 id: linear::LhsId(0),
@@ -890,7 +871,7 @@ mod tests {
                     },
                     linear::Increment {
                         operation: linear::MatchOp::Opcode { path: p(&[0, 1]) },
-                        expected: Some(1),
+                        expected: Some(Operator::Bor as _),
                         actions: vec![
                             linear::Action::BindLhs {
                                 id: linear::LhsId(1),

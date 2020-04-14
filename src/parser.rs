@@ -687,7 +687,9 @@ mod test {
                 "iadd_imm",
                 "iconst",
                 "imul",
+                "imul_imm",
                 "ishl",
+                "sdiv",
                 "sshr",
             }
             err {
