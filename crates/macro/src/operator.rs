@@ -2,6 +2,7 @@
 
 use crate::proc_macro::TokenStream;
 use crate::PeepmaticOpts;
+use proc_macro2::{Ident, Span};
 use quote::quote;
 use syn::DeriveInput;
 use syn::Error;
@@ -25,6 +26,8 @@ pub fn derive_operator(input: TokenStream) -> TokenStream {
     };
     let type_methods = create_type_methods(&variants);
 
+    let parse_impl = create_parse_impl(&variants);
+
     let expanded = quote! {
         impl Operator {
             #arity
@@ -35,6 +38,8 @@ pub fn derive_operator(input: TokenStream) -> TokenStream {
                 #num_operators
             }
         }
+
+        #parse_impl
     };
 
     // eprintln!("{}", expanded);
@@ -216,5 +221,53 @@ fn create_type_methods(variants: &[OperatorVariant]) -> impl quote::ToTokens {
                 #( #param_types )*
             }
         }
+    }
+}
+
+fn snake_case(s: &str) -> String {
+    let mut t = String::with_capacity(s.len() + 1);
+    for (i, ch) in s.chars().enumerate() {
+        if i != 0 && ch.is_uppercase() {
+            t.push('_');
+        }
+        t.extend(ch.to_lowercase());
+    }
+    t
+}
+
+fn create_parse_impl(variants: &[OperatorVariant]) -> impl quote::ToTokens {
+    let token_defs = variants.iter().map(|v| {
+        let tok = snake_case(&v.syn.ident.to_string());
+        let tok = Ident::new(&tok, Span::call_site());
+        quote! {
+            wast::custom_keyword!(#tok);
+        }
+    });
+
+    let parses = variants.iter().map(|v| {
+        let tok = snake_case(&v.syn.ident.to_string());
+        let tok = Ident::new(&tok, Span::call_site());
+        let ident = &v.syn.ident;
+        quote! {
+            if p.peek::<#tok>() {
+                p.parse::<#tok>()?;
+                return Ok(Operator::#ident);
+            }
+        }
+    });
+
+    quote! {
+        const _PARSE_IMPL_FOR_OPERATOR: () = {
+            #( #token_defs )*
+
+            impl<'a> wast::parser::Parse<'a> for Operator {
+                fn parse(p: wast::parser::Parser<'a>) -> wast::parser::Result<Self> {
+                    #( #parses )*
+                    Err(p.error("expected operator"))
+                }
+            }
+
+            ()
+        };
     }
 }
