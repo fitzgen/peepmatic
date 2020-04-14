@@ -52,6 +52,14 @@ pub enum Operator {
     /// `sshr`
     #[peepmatic(params(iNN, iNN), result(iNN))]
     Sshr,
+
+    /// `udiv`
+    #[peepmatic(params(iNN, iNN), result(iNN))]
+    Udiv,
+
+    /// `udiv_imm`
+    #[peepmatic(immediates(iNN), params(iNN), result(iNN))]
+    UdivImm,
 }
 
 /// TODO FITZGEN
@@ -78,6 +86,8 @@ mod tok {
     custom_keyword!(sdiv);
     custom_keyword!(sdiv_imm);
     custom_keyword!(sshr);
+    custom_keyword!(udiv);
+    custom_keyword!(udiv_imm);
 }
 
 impl<'a> wast::parser::Parse<'a> for Operator {
@@ -105,6 +115,8 @@ impl<'a> wast::parser::Parse<'a> for Operator {
             sdiv => Sdiv,
             sdiv_imm => SdivImm,
             sshr => Sshr,
+            udiv => Udiv,
+            udiv_imm => UdivImm,
         );
 
         Err(p.error("expected operator"))
