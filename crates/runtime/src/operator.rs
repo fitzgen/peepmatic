@@ -45,6 +45,10 @@ pub enum Operator {
     #[peepmatic(params(iNN, iNN), result(iNN))]
     Sdiv,
 
+    /// `sdiv_imm`
+    #[peepmatic(immediates(iNN), params(iNN), result(iNN))]
+    SdivImm,
+
     /// `sshr`
     #[peepmatic(params(iNN, iNN), result(iNN))]
     Sshr,
@@ -72,6 +76,7 @@ mod tok {
     custom_keyword!(ishl);
     custom_keyword!(isub);
     custom_keyword!(sdiv);
+    custom_keyword!(sdiv_imm);
     custom_keyword!(sshr);
 }
 
@@ -98,6 +103,7 @@ impl<'a> wast::parser::Parse<'a> for Operator {
             imul_imm => ImulImm,
             ishl => Ishl,
             sdiv => Sdiv,
+            sdiv_imm => SdivImm,
             sshr => Sshr,
         );
 

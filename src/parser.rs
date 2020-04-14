@@ -690,6 +690,7 @@ mod test {
                 "imul_imm",
                 "ishl",
                 "sdiv",
+                "sdiv_imm",
                 "sshr",
             }
             err {
