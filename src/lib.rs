@@ -140,7 +140,12 @@ mod tests {
     use super::*;
 
     #[test]
+    fn compile_redundant_bor() {
+        compile_file(Path::new("examples/redundant-bor.peepmatic")).unwrap();
+    }
+
+    #[test]
     fn compile_preopt() {
-        compile_file(Path::new("preopt.peepmatic")).unwrap();
+        compile_file(Path::new("examples/preopt.peepmatic")).unwrap();
     }
 }

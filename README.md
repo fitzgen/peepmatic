@@ -1,15 +1,40 @@
 > ⚠ **Warning!** This project is very much a work-in-progress and does not
 > actually work yet! ⚠
 
-# `peepmatic`
+<div align="center">
+  <h1><code>peepmatic</code></h1>
 
-**`peepmatic` is a DSL and compiler for generating peephole optimizers for
-[Cranelift][].**
+  <p>
+    <b>
+      <code>peepmatic</code> is a DSL and compiler for peephole optimizers for
+      <a href="https://github.com/bytecodealliance/wasmtime/tree/master/cranelift#readme">Cranelift</a>.
+    </b>
+  </p>
 
-![Rust](https://github.com/fitzgen/peepmatic/workflows/Rust/badge.svg)
+  <img src="https://github.com/fitzgen/peepmatic/workflows/Rust/badge.svg"/>
 
-The user writes a set of optimizations in the DSL, and then `peepmatic` compiles
-the set of optimizations into an efficient peephole optimizer:
+</div>
+
+<!-- START doctoc generated TOC please keep comment here to allow auto update -->
+<!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
+
+
+- [About](#about)
+- [A DSL for Optimizations](#a-dsl-for-optimizations)
+  - [Variables](#variables)
+  - [Constants](#constants)
+  - [Nested Patterns](#nested-patterns)
+  - [Preconditions and Unquoting](#preconditions-and-unquoting)
+  - [Bit Widths](#bit-widths)
+
+<!-- END doctoc generated TOC please keep comment here to allow auto update -->
+
+## About
+
+Peepmatic is a DSL for peephole optimizations and compiler for generating
+peephole optimizers from them. The user writes a set of optimizations in the
+DSL, and then `peepmatic` compiles the set of optimizations into an efficient
+peephole optimizer:
 
 ```
 DSL ----peepmatic----> Peephole Optimizer
@@ -32,6 +57,29 @@ non-Cranelift targets is not a goal.
 [Cranelift]: https://github.com/bytecodealliance/wasmtime/tree/master/cranelift#readme
 [Souper]: https://github.com/google/souper
 [Alive]: https://github.com/AliveToolkit/alive2
+
+## Example
+
+This snippet of our DSL describes optimizations for removing redundant
+bitwise-or instructions that are no-ops:
+
+```lisp
+(=> (bor $x (bor $x $y))
+    (bor $x $y))
+
+(=> (bor $y (bor $x $y))
+    (bor $x $y))
+
+(=> (bor (bor $x $y) $x)
+    (bor $x $y))
+
+(=> (bor (bor $x $y) $y)
+    (bor $x $y))
+```
+
+When compiled into a peephole optimizer automaton, they look like this:
+
+![](examples/redundant-bor.png)
 
 ## A DSL for Optimizations
 
