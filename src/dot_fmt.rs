@@ -77,67 +77,33 @@ impl DotFmt<Option<u32>, linear::MatchOp, Vec<linear::Action>> for PeepholeDotFm
 
         let p = p(self.0);
 
-        let mut rhs_id = 0;
-        let mut next_rhs_id = || {
-            let id = rhs_id;
-            rhs_id += 1;
-            id
-        };
-
         for a in actions {
             match a {
                 BindLhs { id, path } => write!(w, "$lhs{} = bind-lhs @ {}<br/>", id.0, p(path))?,
-                GetLhsBinding { id } => write!(
-                    w,
-                    "$rhs{} = get-lhs-binding $lhs{}<br/>",
-                    next_rhs_id(),
-                    id.0
-                )?,
-                UnaryUnquote { operator, operand } => write!(
-                    w,
-                    "$rhs{} = eval {} $rhs{}<br/>",
-                    next_rhs_id(),
-                    operator,
-                    operand.0
-                )?,
+                GetLhsBinding { id } => write!(w, "get-lhs-binding $lhs{}<br/>", id.0)?,
+                UnaryUnquote { operator, operand } => {
+                    write!(w, "eval {} $rhs{}<br/>", operator, operand.0)?
+                }
                 BinaryUnquote { operator, operands } => write!(
                     w,
-                    "$rhs{} = eval {} $rhs{}, $rhs{}<br/>",
-                    next_rhs_id(),
-                    operator,
-                    operands[0].0,
-                    operands[1].0,
+                    "eval {} $rhs{}, $rhs{}<br/>",
+                    operator, operands[0].0, operands[1].0,
                 )?,
-                MakeIntegerConst { value } => {
-                    write!(w, "$rhs{} = {}<br/>", next_rhs_id(), self.1.lookup(*value))?
-                }
-                MakeBooleanConst { value } => write!(w, "$rhs{} = {}<br/>", next_rhs_id(), value)?,
-                MakeConditionCode { cc } => write!(w, "$rhs{} = {}<br/>", next_rhs_id(), cc)?,
+                MakeIntegerConst { value } => write!(w, "{}<br/>", self.1.lookup(*value))?,
+                MakeBooleanConst { value } => write!(w, "{}<br/>", value)?,
+                MakeConditionCode { cc } => write!(w, "{}<br/>", cc)?,
                 MakeUnaryInst {
                     operand, operator, ..
-                } => write!(
-                    w,
-                    "$rhs{} = make {} $rhs{}<br/>",
-                    next_rhs_id(),
-                    operator,
-                    operand.0,
-                )?,
+                } => write!(w, "make {} $rhs{}<br/>", operator, operand.0,)?,
                 MakeBinaryInst { operands, operator } => write!(
                     w,
-                    "$rhs{} = make {} $rhs{}, $rhs{}<br/>",
-                    next_rhs_id(),
-                    operator,
-                    operands[0].0,
-                    operands[1].0,
+                    "make {} $rhs{}, $rhs{}<br/>",
+                    operator, operands[0].0, operands[1].0,
                 )?,
                 MakeTernaryInst { operator, operands } => write!(
                     w,
-                    "$rhs{} = make {} $rhs{}, $rhs{}, $rhs{}<br/>",
-                    next_rhs_id(),
-                    operator,
-                    operands[0].0,
-                    operands[1].0,
-                    operands[2].0,
+                    "make {} $rhs{}, $rhs{}, $rhs{}<br/>",
+                    operator, operands[0].0, operands[1].0, operands[2].0,
                 )?,
             }
         }
