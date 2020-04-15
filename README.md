@@ -1,6 +1,3 @@
-> ⚠ **Warning!** This project is very much a work-in-progress and does not
-> actually work yet! ⚠
-
 <div align="center">
   <h1><code>peepmatic</code></h1>
 
@@ -20,6 +17,7 @@
 
 
 - [About](#about)
+- [Example](#example)
 - [A DSL for Optimizations](#a-dsl-for-optimizations)
   - [Variables](#variables)
   - [Constants](#constants)
