@@ -358,8 +358,12 @@ where
     }
 }
 
+/// A state in an automaton.
+///
+/// Only use a `State` with the automaton that it came from! Mixing and matching
+/// states between automata will result in bogus results and/or panics!
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Ord, PartialOrd)]
-struct State(u32);
+pub struct State(u32);
 
 #[derive(Clone, Debug)]
 struct BuilderInner<TAlphabet, TState, TOutput>
@@ -936,11 +940,33 @@ where
     TState: Clone + Eq + Hash,
     TOutput: Output,
 {
+    /// Get the current state in the automaton that this query is at.
+    pub fn current_state(&self) -> State {
+        self.current_state
+    }
+
+    /// Move this query to the given state in the automaton.
+    ///
+    /// This can be used to implement backtracking, if you can also reset your
+    /// output to the way it was when you previously visited the given `State`.
+    ///
+    /// Only use a `State` that came from this query's automaton! Mixing and
+    /// matching states between automata will result in bogus results and/or
+    /// panics!
+    pub fn go_to_state(&mut self, state: State) {
+        assert!((state.0 as usize) < self.automata.transitions.len());
+        debug_assert_eq!(
+            self.automata.state_data.len(),
+            self.automata.transitions.len()
+        );
+        self.current_state = state;
+    }
+
     /// Transition to the next state given the next input character, and return
     /// the partial output for that transition.
     ///
     /// If `None` is returned, then the input sequence has been rejected by the
-    /// automata.
+    /// automata, and this query remains in its current state.
     #[inline]
     pub fn next(&mut self, input: &TAlphabet) -> Option<&'a TOutput> {
         let State(i) = self.current_state;
