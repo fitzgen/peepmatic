@@ -18,29 +18,17 @@
 #![deny(missing_debug_implementations)]
 
 pub mod cc;
+pub mod error;
+pub mod instruction_set;
 pub mod integer_interner;
 pub mod linear;
 pub mod operator;
+pub mod optimizations;
+pub mod optimizer;
+pub mod part;
 pub mod paths;
 pub mod r#type;
 
-use peepmatic_automata::Automata;
-use serde::{Deserialize, Serialize};
-
-/// A peephole optimizer.
-///
-/// This is the compilation result of the `peepmatic` crate, after its taken a
-/// bunch of optimizations written in the DSL and lowered and combined them.
-#[derive(Debug, Serialize, Deserialize)]
-pub struct PeepholeOptimizer {
-    /// The instruction paths referenced by the peephole optimizer.
-    pub paths: paths::PathInterner,
-
-    /// Not all integers we're matching on fit in the `u32` that we use as the
-    /// result of match operations. So we intern them and refer to them by id.
-    pub integers: integer_interner::IntegerInterner,
-
-    /// The underlying automata for matching optimizations' left-hand sides, and
-    /// building up the corresponding right-hand side.
-    pub automata: Automata<Option<u32>, linear::MatchOp, Vec<linear::Action>>,
-}
+pub use error::{Error, Result};
+pub use optimizations::PeepholeOptimizations;
+pub use optimizer::PeepholeOptimizer;

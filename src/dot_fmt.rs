@@ -89,18 +89,34 @@ impl DotFmt<Option<u32>, linear::MatchOp, Vec<linear::Action>> for PeepholeDotFm
                     "eval {} $rhs{}, $rhs{}<br/>",
                     operator, operands[0].0, operands[1].0,
                 )?,
-                MakeIntegerConst { value } => write!(w, "{}<br/>", self.1.lookup(*value))?,
-                MakeBooleanConst { value } => write!(w, "{}<br/>", value)?,
+                MakeIntegerConst {
+                    value,
+                    bit_width: _,
+                } => write!(w, "{}<br/>", self.1.lookup(*value))?,
+                MakeBooleanConst {
+                    value,
+                    bit_width: _,
+                } => write!(w, "{}<br/>", value)?,
                 MakeConditionCode { cc } => write!(w, "{}<br/>", cc)?,
                 MakeUnaryInst {
-                    operand, operator, ..
+                    operand,
+                    operator,
+                    r#type: _,
                 } => write!(w, "make {} $rhs{}<br/>", operator, operand.0,)?,
-                MakeBinaryInst { operands, operator } => write!(
+                MakeBinaryInst {
+                    operator,
+                    operands,
+                    r#type: _,
+                } => write!(
                     w,
                     "make {} $rhs{}, $rhs{}<br/>",
                     operator, operands[0].0, operands[1].0,
                 )?,
-                MakeTernaryInst { operator, operands } => write!(
+                MakeTernaryInst {
+                    operator,
+                    operands,
+                    r#type: _,
+                } => write!(
                     w,
                     "make {} $rhs{}, $rhs{}, $rhs{}<br/>",
                     operator, operands[0].0, operands[1].0, operands[2].0,

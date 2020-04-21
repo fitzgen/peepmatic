@@ -173,24 +173,22 @@ fn linearize_optimization(
 
         // Some operations require type ascriptions for us to infer the correct
         // bit width of their results: `ireduce`, `sextend`, `uextend`, etc.
-        // When there is such a type ascription, insert another increment that
-        // checks the instruction-being-matched's bit width.
-        if let Pattern::Operation(Operation {
-            operator_type: Some(ty),
-            ..
-        }) = pattern
-        {
-            let id = lhs_canonicalizer.gensym();
-            increments
-                .last_mut()
-                .unwrap()
-                .actions
-                .push(linear::Action::BindLhs { id, path });
-            increments.push(linear::Increment {
-                operation: linear::MatchOp::BitWidth { id },
-                expected: Some(ty.bit_width() as u32),
-                actions: vec![],
-            });
+        // When there is such a type ascription in the pattern, insert another
+        // increment that checks the instruction-being-matched's bit width.
+        if let Pattern::Operation(Operation { r#type, .. }) = pattern {
+            if let Some(w) = r#type.get().and_then(|ty| ty.bit_width.fixed_width()) {
+                let id = lhs_canonicalizer.gensym();
+                increments
+                    .last_mut()
+                    .unwrap()
+                    .actions
+                    .push(linear::Action::BindLhs { id, path });
+                increments.push(linear::Increment {
+                    operation: linear::MatchOp::BitWidth { id },
+                    expected: Some(w as u32),
+                    actions: vec![],
+                });
+            }
         }
     }
 
@@ -359,6 +357,12 @@ impl<'a> LhsCanonicalizer<'a> {
             // in the pre-order traversal, but peeking ahead here lets us bind
             // them earlier, which lets us build more of the RHS earlier as
             // well.
+            //
+            // Note that we cannot do this with constant child patterns, only
+            // variable child patterns, because binding constants before we know
+            // they are actually constant might result in us unblocking an RHS
+            // action that then tries to unwrap the bound constant's value,
+            // leading to panics if it isn't actually a constant.
             Pattern::Operation(op) => {
                 let mut child_path = paths.lookup(path).0.to_vec();
 
@@ -368,8 +372,7 @@ impl<'a> LhsCanonicalizer<'a> {
                 for (i, child) in children.iter().enumerate() {
                     debug_assert!(i <= (std::u8::MAX as usize));
                     match child {
-                        DynAstRef::Pattern(Pattern::Variable(Variable { id, .. }))
-                        | DynAstRef::Pattern(Pattern::Constant(Constant { id, .. })) => {
+                        DynAstRef::Pattern(Pattern::Variable(Variable { id, .. })) => {
                             child_path.push(i as u8);
                             let child_path_id = paths.intern(Path::new(&child_path));
                             child_path.pop();
@@ -388,10 +391,7 @@ impl<'a> LhsCanonicalizer<'a> {
             }
 
             // If this is the first time we've seen an identifier defined on the
-            // left-hand side, create an action to add it to the scope. This
-            // will only happen if the whole pattern is a variable or constant,
-            // otherwise we would have already canonicalized it after processing
-            // its parent `Pattern::Operation`.
+            // left-hand side, create an action to add it to the scope.
             Pattern::Variable(Variable { id, .. }) | Pattern::Constant(Constant { id, .. }) => {
                 let (id, is_new) = self.canonicalize_id(id, path);
                 if is_new {
@@ -520,11 +520,19 @@ impl<'a> RhsBuilder<'a> {
     ) -> linear::Action {
         match rhs {
             Rhs::ValueLiteral(ValueLiteral::Integer(i)) => linear::Action::MakeIntegerConst {
-                value: integers.intern(i.value),
+                value: integers.intern(i.value as u64),
+                bit_width: i
+                    .bit_width
+                    .get()
+                    .expect("should be initialized after type checking"),
             },
-            Rhs::ValueLiteral(ValueLiteral::Boolean(b)) => {
-                linear::Action::MakeBooleanConst { value: b.value }
-            }
+            Rhs::ValueLiteral(ValueLiteral::Boolean(b)) => linear::Action::MakeBooleanConst {
+                value: b.value,
+                bit_width: b
+                    .bit_width
+                    .get()
+                    .expect("should be initialized after type checking"),
+            },
             Rhs::ValueLiteral(ValueLiteral::ConditionCode(ConditionCode { cc, .. })) => {
                 linear::Action::MakeConditionCode { cc: *cc }
             }
@@ -550,11 +558,18 @@ impl<'a> RhsBuilder<'a> {
             Rhs::Operation(op) => match op.operands.len() {
                 1 => linear::Action::MakeUnaryInst {
                     operator: op.operator,
-                    r#type: op.operator_type,
+                    r#type: op
+                        .r#type
+                        .get()
+                        .expect("should be initialized after type checking"),
                     operand: self.get_rhs_id(&op.operands[0]),
                 },
                 2 => linear::Action::MakeBinaryInst {
                     operator: op.operator,
+                    r#type: op
+                        .r#type
+                        .get()
+                        .expect("should be initialized after type checking"),
                     operands: [
                         self.get_rhs_id(&op.operands[0]),
                         self.get_rhs_id(&op.operands[1]),
@@ -562,6 +577,10 @@ impl<'a> RhsBuilder<'a> {
                 },
                 3 => linear::Action::MakeTernaryInst {
                     operator: op.operator,
+                    r#type: op
+                        .r#type
+                        .get()
+                        .expect("should be initialized after type checking"),
                     operands: [
                         self.get_rhs_id(&op.operands[0]),
                         self.get_rhs_id(&op.operands[1]),
@@ -666,7 +685,7 @@ impl Pattern<'_> {
         match self {
             Pattern::ValueLiteral(ValueLiteral::Integer(Integer { value, .. })) => (
                 linear::MatchOp::IntegerValue { path },
-                Some(integers.intern(*value).into()),
+                Some(integers.intern(*value as u64).into()),
             ),
             Pattern::ValueLiteral(ValueLiteral::Boolean(Boolean { value, .. })) => {
                 (linear::MatchOp::BooleanValue { path }, Some(*value as u32))
@@ -702,7 +721,11 @@ impl Pattern<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use peepmatic_runtime::{integer_interner::IntegerId, operator::Operator};
+    use peepmatic_runtime::{
+        integer_interner::IntegerId,
+        operator::Operator,
+        r#type::{BitWidth, Kind, Type},
+    };
 
     macro_rules! linearizes_to {
         ($name:ident, $source:expr, $make_expected:expr $(,)* ) => {
@@ -738,7 +761,7 @@ mod tests {
                 let mut p = |p: &[u8]| paths.intern(Path::new(&p));
 
                 let mut integers = IntegerInterner::new();
-                let mut i = |i: i128| integers.intern(i);
+                let mut i = |i: u64| integers.intern(i);
 
                 #[allow(unused_variables)]
                 let expected = $make_expected(&mut p, &mut i);
@@ -759,7 +782,7 @@ mod tests {
           (is-power-of-two $C))
     (ishl $x $C))
         ",
-        |p: &mut dyn FnMut(&[u8]) -> PathId, i: &mut dyn FnMut(i128) -> IntegerId| {
+        |p: &mut dyn FnMut(&[u8]) -> PathId, i: &mut dyn FnMut(u64) -> IntegerId| {
             linear::Optimization {
                 increments: vec![
                     linear::Increment {
@@ -770,26 +793,31 @@ mod tests {
                                 id: linear::LhsId(0),
                                 path: p(&[0, 0]),
                             },
-                            linear::Action::BindLhs {
-                                id: linear::LhsId(1),
-                                path: p(&[0, 1]),
-                            },
                             linear::Action::GetLhsBinding {
                                 id: linear::LhsId(0),
-                            },
-                            linear::Action::GetLhsBinding {
-                                id: linear::LhsId(1),
-                            },
-                            linear::Action::MakeBinaryInst {
-                                operator: Operator::Ishl,
-                                operands: [linear::RhsId(0), linear::RhsId(1)],
                             },
                         ],
                     },
                     linear::Increment {
                         operation: linear::MatchOp::IsConst { path: p(&[0, 1]) },
                         expected: Some(1),
-                        actions: vec![],
+                        actions: vec![
+                            linear::Action::BindLhs {
+                                id: linear::LhsId(1),
+                                path: p(&[0, 1]),
+                            },
+                            linear::Action::GetLhsBinding {
+                                id: linear::LhsId(1),
+                            },
+                            linear::Action::MakeBinaryInst {
+                                operator: Operator::Ishl,
+                                r#type: Type {
+                                    kind: Kind::Int,
+                                    bit_width: BitWidth::Polymorphic,
+                                },
+                                operands: [linear::RhsId(0), linear::RhsId(1)],
+                            },
+                        ],
                     },
                     linear::Increment {
                         operation: linear::MatchOp::IsPowerOfTwo {
@@ -806,7 +834,7 @@ mod tests {
     linearizes_to!(
         variable_pattern_id_optimization,
         "(=> $x $x)",
-        |p: &mut dyn FnMut(&[u8]) -> PathId, i: &mut dyn FnMut(i128) -> IntegerId| {
+        |p: &mut dyn FnMut(&[u8]) -> PathId, i: &mut dyn FnMut(u64) -> IntegerId| {
             linear::Optimization {
                 increments: vec![linear::Increment {
                     operation: linear::MatchOp::Nop,
@@ -828,7 +856,7 @@ mod tests {
     linearizes_to!(
         constant_pattern_id_optimization,
         "(=> $C $C)",
-        |p: &mut dyn FnMut(&[u8]) -> PathId, i: &mut dyn FnMut(i128) -> IntegerId| {
+        |p: &mut dyn FnMut(&[u8]) -> PathId, i: &mut dyn FnMut(u64) -> IntegerId| {
             linear::Optimization {
                 increments: vec![linear::Increment {
                     operation: linear::MatchOp::IsConst { path: p(&[0]) },
@@ -850,12 +878,15 @@ mod tests {
     linearizes_to!(
         boolean_literal_id_optimization,
         "(=> true true)",
-        |p: &mut dyn FnMut(&[u8]) -> PathId, i: &mut dyn FnMut(i128) -> IntegerId| {
+        |p: &mut dyn FnMut(&[u8]) -> PathId, i: &mut dyn FnMut(u64) -> IntegerId| {
             linear::Optimization {
                 increments: vec![linear::Increment {
                     operation: linear::MatchOp::BooleanValue { path: p(&[0]) },
                     expected: Some(1),
-                    actions: vec![linear::Action::MakeBooleanConst { value: true }],
+                    actions: vec![linear::Action::MakeBooleanConst {
+                        value: true,
+                        bit_width: BitWidth::Polymorphic,
+                    }],
                 }],
             }
         },
@@ -864,12 +895,15 @@ mod tests {
     linearizes_to!(
         number_literal_id_optimization,
         "(=> 5 5)",
-        |p: &mut dyn FnMut(&[u8]) -> PathId, i: &mut dyn FnMut(i128) -> IntegerId| {
+        |p: &mut dyn FnMut(&[u8]) -> PathId, i: &mut dyn FnMut(u64) -> IntegerId| {
             linear::Optimization {
                 increments: vec![linear::Increment {
                     operation: linear::MatchOp::IntegerValue { path: p(&[0]) },
                     expected: Some(i(5).into()),
-                    actions: vec![linear::Action::MakeIntegerConst { value: i(5) }],
+                    actions: vec![linear::Action::MakeIntegerConst {
+                        value: i(5),
+                        bit_width: BitWidth::Polymorphic,
+                    }],
                 }],
             }
         },
@@ -878,12 +912,17 @@ mod tests {
     linearizes_to!(
         operation_id_optimization,
         "(=> (iconst $C) (iconst $C))",
-        |p: &mut dyn FnMut(&[u8]) -> PathId, i: &mut dyn FnMut(i128) -> IntegerId| {
+        |p: &mut dyn FnMut(&[u8]) -> PathId, i: &mut dyn FnMut(u64) -> IntegerId| {
             linear::Optimization {
                 increments: vec![
                     linear::Increment {
                         operation: linear::MatchOp::Opcode { path: p(&[0]) },
                         expected: Some(Operator::Iconst as _),
+                        actions: vec![],
+                    },
+                    linear::Increment {
+                        operation: linear::MatchOp::IsConst { path: p(&[0, 0]) },
+                        expected: Some(1),
                         actions: vec![
                             linear::Action::BindLhs {
                                 id: linear::LhsId(0),
@@ -894,15 +933,13 @@ mod tests {
                             },
                             linear::Action::MakeUnaryInst {
                                 operator: Operator::Iconst,
-                                r#type: None,
+                                r#type: Type {
+                                    kind: Kind::Int,
+                                    bit_width: BitWidth::Polymorphic,
+                                },
                                 operand: linear::RhsId(0),
                             },
                         ],
-                    },
-                    linear::Increment {
-                        operation: linear::MatchOp::IsConst { path: p(&[0, 0]) },
-                        expected: Some(1),
-                        actions: vec![],
                     },
                 ],
             }
@@ -912,7 +949,7 @@ mod tests {
     linearizes_to!(
         redundant_bor,
         "(=> (bor $x (bor $x $y)) (bor $x $y))",
-        |p: &mut dyn FnMut(&[u8]) -> PathId, i: &mut dyn FnMut(i128) -> IntegerId| {
+        |p: &mut dyn FnMut(&[u8]) -> PathId, i: &mut dyn FnMut(u64) -> IntegerId| {
             linear::Optimization {
                 increments: vec![
                     linear::Increment {
@@ -941,6 +978,10 @@ mod tests {
                             },
                             linear::Action::MakeBinaryInst {
                                 operator: Operator::Bor,
+                                r#type: Type {
+                                    kind: Kind::Int,
+                                    bit_width: BitWidth::Polymorphic,
+                                },
                                 operands: [linear::RhsId(0), linear::RhsId(1)],
                             },
                         ],
@@ -960,14 +1001,17 @@ mod tests {
 
     linearizes_to!(
         large_integers,
-        // i128::MAX
-        "(=> 170141183460469231731687303715884105727 0)",
-        |p: &mut dyn FnMut(&[u8]) -> PathId, i: &mut dyn FnMut(i128) -> IntegerId| {
+        // u64::MAX
+        "(=> 18446744073709551615 0)",
+        |p: &mut dyn FnMut(&[u8]) -> PathId, i: &mut dyn FnMut(u64) -> IntegerId| {
             linear::Optimization {
                 increments: vec![linear::Increment {
                     operation: linear::MatchOp::IntegerValue { path: p(&[0]) },
-                    expected: Some(i(170141183460469231731687303715884105727).into()),
-                    actions: vec![linear::Action::MakeIntegerConst { value: i(0) }],
+                    expected: Some(i(std::u64::MAX).into()),
+                    actions: vec![linear::Action::MakeIntegerConst {
+                        value: i(0),
+                        bit_width: BitWidth::Polymorphic,
+                    }],
                 }],
             }
         }
@@ -976,7 +1020,7 @@ mod tests {
     linearizes_to!(
         ireduce_with_type_ascription,
         "(=> (ireduce{i32} $x) 0)",
-        |p: &mut dyn FnMut(&[u8]) -> PathId, i: &mut dyn FnMut(i128) -> IntegerId| {
+        |p: &mut dyn FnMut(&[u8]) -> PathId, i: &mut dyn FnMut(u64) -> IntegerId| {
             linear::Optimization {
                 increments: vec![
                     linear::Increment {
@@ -987,7 +1031,10 @@ mod tests {
                                 id: linear::LhsId(0),
                                 path: p(&[0, 0]),
                             },
-                            linear::Action::MakeIntegerConst { value: i(0) },
+                            linear::Action::MakeIntegerConst {
+                                value: i(0),
+                                bit_width: BitWidth::ThirtyTwo,
+                            },
                             linear::Action::BindLhs {
                                 id: linear::LhsId(1),
                                 path: p(&[0]),

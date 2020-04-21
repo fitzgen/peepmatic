@@ -453,7 +453,7 @@ mod tests {
                     .collect();
 
                 let mut p = |p: &[u8]| paths.intern(Path::new(&p));
-                let mut i = |i: i128| Some(integers.intern(i).into());
+                let mut i = |i: u64| Some(integers.intern(i).into());
                 let expected = $make_expected(&mut p, &mut i);
 
                 assert_eq!(expected, actual);
@@ -473,7 +473,7 @@ mod tests {
 (=>       (iadd $x 42)                       0)
 (=>       (iadd $x (iadd $y $z))             0)
 ",
-        |p: &mut dyn FnMut(&[u8]) -> PathId, i: &mut dyn FnMut(i128) -> Option<u32>| vec![
+        |p: &mut dyn FnMut(&[u8]) -> PathId, i: &mut dyn FnMut(u64) -> Option<u32>| vec![
             vec![
                 (Opcode { path: p(&[0]) }, Some(Operator::Iadd as _)),
                 (Opcode { path: p(&[0, 1]) }, Some(Operator::Iadd as _))
@@ -556,7 +556,7 @@ mod tests {
                 } = opts;
 
                 let mut p = |p: &[u8]| paths.intern(Path::new(&p));
-                let mut i = |i: i128| Some(integers.intern(i).into());
+                let mut i = |i: u64| Some(integers.intern(i).into());
 
                 #[allow(unused_variables)]
                 let expected = $make_expected(&mut p, &mut i);
@@ -572,7 +572,7 @@ mod tests {
 (=> (iadd $w (iadd $x (iadd $y $z))) 0)
 (=> (iadd $x $C)                     0)
 ",
-        |p: &mut dyn FnMut(&[u8]) -> PathId, i: &mut dyn FnMut(i128) -> Option<u32>| vec![
+        |p: &mut dyn FnMut(&[u8]) -> PathId, i: &mut dyn FnMut(u64) -> Option<u32>| vec![
             vec![
                 (Opcode { path: p(&[0]) }, Some(Operator::Iadd as _)),
                 (Opcode { path: p(&[0, 1]) }, Some(Operator::Iadd as _)),
@@ -612,7 +612,7 @@ mod tests {
 (=> (imul 2 $x) (ishl $x 1))
 (=> (imul $x 2) (ishl $x 1))
 ",
-        |p: &mut dyn FnMut(&[u8]) -> PathId, i: &mut dyn FnMut(i128) -> Option<u32>| vec![
+        |p: &mut dyn FnMut(&[u8]) -> PathId, i: &mut dyn FnMut(u64) -> Option<u32>| vec![
             vec![
                 (Opcode { path: p(&[0]) }, Some(Operator::Imul as _)),
                 (IntegerValue { path: p(&[0, 0]) }, i(2))
@@ -650,7 +650,7 @@ mod tests {
 (=> 4 4)
 (=> 5 5)
 ",
-        |p: &mut dyn FnMut(&[u8]) -> PathId, i: &mut dyn FnMut(i128) -> Option<u32>| vec![
+        |p: &mut dyn FnMut(&[u8]) -> PathId, i: &mut dyn FnMut(u64) -> Option<u32>| vec![
             vec![(IntegerValue { path: p(&[0]) }, i(5))],
             vec![(IntegerValue { path: p(&[0]) }, i(4))],
             vec![(IntegerValue { path: p(&[0]) }, i(3))],
@@ -666,7 +666,7 @@ mod tests {
 (=> (iadd 999 $C) 0)
 (=> (iadd 666 (iadd $x (iadd $y $z))) 0)
 ",
-        |p: &mut dyn FnMut(&[u8]) -> PathId, i: &mut dyn FnMut(i128) -> Option<u32>| vec![
+        |p: &mut dyn FnMut(&[u8]) -> PathId, i: &mut dyn FnMut(u64) -> Option<u32>| vec![
             vec![
                 (Opcode { path: p(&[0]) }, Some(Operator::Iadd as _)),
                 (IntegerValue { path: p(&[0, 0]) }, i(666)),

@@ -14,12 +14,17 @@
 
 use crate::ast::{Span as _, *};
 use crate::traversals::{Dfs, TraversalEvent};
-use peepmatic_runtime::operator::{Operator, TypingContext as TypingContextTrait};
+use peepmatic_runtime::{
+    operator::{Operator, TypingContext as TypingContextTrait},
+    r#type::{BitWidth, Kind, Type},
+};
 use std::borrow::Cow;
 use std::collections::HashMap;
+use std::convert::{TryFrom, TryInto};
 use std::fmt;
 use std::hash::Hash;
 use std::iter;
+use std::mem;
 use std::ops::{Deref, DerefMut};
 use std::path::Path;
 use wast::{Error as WastError, Id, Span};
@@ -181,7 +186,7 @@ fn canonicalized_lhs_key(lhs: &Lhs) -> impl Hash + Eq {
     enum CanonicalBit {
         Var(u32),
         Const(u32),
-        Integer(i128),
+        Integer(i64),
         Boolean(bool),
         ConditionCode(peepmatic_runtime::cc::ConditionCode),
         Operation(Operator),
@@ -193,6 +198,11 @@ fn canonicalized_lhs_key(lhs: &Lhs) -> impl Hash + Eq {
 pub(crate) struct TypingContext<'a> {
     z3: &'a z3::Context,
     type_kind_sort: z3::DatatypeSort<'a>,
+    solver: z3::Solver<'a>,
+
+    // The type of the root of the optimization. Initialized when collecting
+    // type constraints.
+    root_ty: Option<TypeVar<'a>>,
 
     // See the comments above `enter_operation_scope`.
     operation_scope: HashMap<&'static str, TypeVar<'a>>,
@@ -204,6 +214,11 @@ pub(crate) struct TypingContext<'a> {
     // originates from, and an optional message to be displayed if the
     // constraint is not satisfied.
     constraints: Vec<(z3::ast::Bool<'a>, Span, Option<Cow<'static, str>>)>,
+
+    // TODO FITZGEN
+    boolean_literals: Vec<(&'a Boolean<'a>, TypeVar<'a>)>,
+    integer_literals: Vec<(&'a Integer<'a>, TypeVar<'a>)>,
+    rhs_operations: Vec<(&'a Operation<'a, Rhs<'a>>, TypeVar<'a>)>,
 }
 
 impl<'a> TypingContext<'a> {
@@ -217,10 +232,15 @@ impl<'a> TypingContext<'a> {
             .finish("TypeKind");
         TypingContext {
             z3,
+            solver: z3::Solver::new(z3),
+            root_ty: None,
             operation_scope: Default::default(),
             id_to_type_var: Default::default(),
             type_kind_sort,
             constraints: vec![],
+            boolean_literals: Default::default(),
+            integer_literals: Default::default(),
+            rhs_operations: Default::default(),
         }
     }
 
@@ -293,60 +313,98 @@ impl<'a> TypingContext<'a> {
         }
     }
 
-    fn assert_is_integer(&mut self, span: Span, ty: &TypeVar<'a>) {
-        let is_int = self.type_kind_sort.variants[0]
+    fn remember_boolean_literal(&mut self, b: &'a Boolean<'a>, ty: TypeVar<'a>) {
+        self.assert_is_bool(b.span, &ty);
+        self.boolean_literals.push((b, ty));
+    }
+
+    fn remember_integer_literal(&mut self, i: &'a Integer<'a>, ty: TypeVar<'a>) {
+        self.assert_is_integer(i.span, &ty);
+        self.integer_literals.push((i, ty));
+    }
+
+    fn remember_rhs_operation(&mut self, op: &'a Operation<'a, Rhs<'a>>, ty: TypeVar<'a>) {
+        self.rhs_operations.push((op, ty));
+    }
+
+    fn is_int(&self, ty: &TypeVar<'a>) -> z3::ast::Bool<'a> {
+        self.type_kind_sort.variants[0]
             .tester
             .apply(&[&ty.kind.clone().into()])
             .as_bool()
-            .unwrap();
-        self.constraints
-            .push((is_int, span, Some("type error: expected integer".into())));
+            .unwrap()
+    }
+
+    fn is_bool(&self, ty: &TypeVar<'a>) -> z3::ast::Bool<'a> {
+        self.type_kind_sort.variants[1]
+            .tester
+            .apply(&[&ty.kind.clone().into()])
+            .as_bool()
+            .unwrap()
+    }
+
+    fn is_cpu_flags(&self, ty: &TypeVar<'a>) -> z3::ast::Bool<'a> {
+        self.type_kind_sort.variants[2]
+            .tester
+            .apply(&[&ty.kind.clone().into()])
+            .as_bool()
+            .unwrap()
+    }
+
+    fn is_condition_code(&self, ty: &TypeVar<'a>) -> z3::ast::Bool<'a> {
+        self.type_kind_sort.variants[3]
+            .tester
+            .apply(&[&ty.kind.clone().into()])
+            .as_bool()
+            .unwrap()
+    }
+
+    fn is_void(&self, ty: &TypeVar<'a>) -> z3::ast::Bool<'a> {
+        self.type_kind_sort.variants[4]
+            .tester
+            .apply(&[&ty.kind.clone().into()])
+            .as_bool()
+            .unwrap()
+    }
+
+    fn assert_is_integer(&mut self, span: Span, ty: &TypeVar<'a>) {
+        self.constraints.push((
+            self.is_int(ty),
+            span,
+            Some("type error: expected integer".into()),
+        ));
     }
 
     fn assert_is_bool(&mut self, span: Span, ty: &TypeVar<'a>) {
-        let is_bool = self.type_kind_sort.variants[1]
-            .tester
-            .apply(&[&ty.kind.clone().into()])
-            .as_bool()
-            .unwrap();
-        self.constraints
-            .push((is_bool, span, Some("type error: expected bool".into())));
+        self.constraints.push((
+            self.is_bool(ty),
+            span,
+            Some("type error: expected bool".into()),
+        ));
     }
 
     fn assert_is_cpu_flags(&mut self, span: Span, ty: &TypeVar<'a>) {
-        let is_cpu_flags = self.type_kind_sort.variants[2]
-            .tester
-            .apply(&[&ty.kind.clone().into()])
-            .as_bool()
-            .unwrap();
         self.constraints.push((
-            is_cpu_flags,
+            self.is_cpu_flags(ty),
             span,
             Some("type error: expected CPU flags".into()),
         ));
     }
 
     fn assert_is_cc(&mut self, span: Span, ty: &TypeVar<'a>) {
-        let is_cc = self.type_kind_sort.variants[3]
-            .tester
-            .apply(&[&ty.kind.clone().into()])
-            .as_bool()
-            .unwrap();
         self.constraints.push((
-            is_cc,
+            self.is_condition_code(ty),
             span,
             Some("type error: expected condition code".into()),
         ));
     }
 
     fn assert_is_void(&mut self, span: Span, ty: &TypeVar<'a>) {
-        let is_void = self.type_kind_sort.variants[4]
-            .tester
-            .apply(&[&ty.kind.clone().into()])
-            .as_bool()
-            .unwrap();
-        self.constraints
-            .push((is_void, span, Some("type error: expected void".into())));
+        self.constraints.push((
+            self.is_void(ty),
+            span,
+            Some("type error: expected void".into()),
+        ));
     }
 
     fn assert_bit_width(&mut self, span: Span, ty: &TypeVar<'a>, width: u8) {
@@ -390,8 +448,6 @@ impl<'a> TypingContext<'a> {
     }
 
     fn type_check(&self, span: Span) -> VerifyResult<()> {
-        let solver = z3::Solver::new(self.z3);
-
         let trackers = iter::repeat_with(|| z3::ast::Bool::fresh_const(self.z3, "type-constraint"))
             .take(self.constraints.len())
             .collect::<Vec<_>>();
@@ -400,14 +456,14 @@ impl<'a> TypingContext<'a> {
 
         for (constraint_data, tracker) in self.constraints.iter().zip(trackers) {
             let (constraint, span, msg) = constraint_data;
-            solver.assert_and_track(constraint, &tracker);
+            self.solver.assert_and_track(constraint, &tracker);
             tracker_to_diagnostics.insert(tracker, (*span, msg.clone()));
         }
 
-        match solver.check() {
+        match self.solver.check() {
             z3::SatResult::Sat => Ok(()),
             z3::SatResult::Unsat => {
-                let core = solver.get_unsat_core();
+                let core = self.solver.get_unsat_core();
                 if core.is_empty() {
                     return Err(WastError::new(
                         span,
@@ -440,12 +496,108 @@ impl<'a> TypingContext<'a> {
             }
             z3::SatResult::Unknown => Err(anyhow::anyhow!(
                 "z3 returned 'unknown' when evaluating type constraints: {}",
-                solver
+                self.solver
                     .get_reason_unknown()
                     .unwrap_or_else(|| "<no reason given>".into())
             )
             .into()),
         }
+    }
+
+    fn assign_types(&mut self) {
+        for (int, ty) in mem::replace(&mut self.integer_literals, vec![]) {
+            let width = self.ty_var_to_width(&ty);
+            int.bit_width.set(Some(width));
+        }
+        for (b, ty) in mem::replace(&mut self.boolean_literals, vec![]) {
+            let width = self.ty_var_to_width(&ty);
+            b.bit_width.set(Some(width));
+        }
+        for (op, ty) in mem::replace(&mut self.rhs_operations, vec![]) {
+            let kind = self.op_ty_var_to_kind(&ty);
+            let bit_width = match kind {
+                Kind::CpuFlags | Kind::Void => BitWidth::One,
+                Kind::Int | Kind::Bool => self.ty_var_to_width(&ty),
+            };
+            debug_assert!(op.r#type.get().is_none());
+            op.r#type.set(Some(Type { kind, bit_width }));
+        }
+    }
+
+    fn ty_var_to_width(&self, ty_var: &TypeVar<'a>) -> BitWidth {
+        // Doing solver push/pops apparently clears out the model, so we have to
+        // re-check each time to ensure that it exists, and Z3 doesn't helpfully
+        // abort the process for us. This should be fast, since the solver
+        // remembers inferences from earlier checks.
+        assert_eq!(self.solver.check(), z3::SatResult::Sat);
+
+        // Check if there is more than one satisfying assignment to
+        // `ty_var`'s width variable. If so, then it must be polymorphic. If
+        // not, then it must have a fixed value.
+        let model = self.solver.get_model();
+        let width_var = model.eval(&ty_var.width).unwrap();
+        let bit_width: u8 = width_var.as_u64().unwrap().try_into().unwrap();
+
+        self.solver.push();
+        self.solver.assert(&ty_var.width._eq(&width_var).not());
+        let is_polymorphic = match self.solver.check() {
+            z3::SatResult::Sat => true,
+            z3::SatResult::Unsat => false,
+            z3::SatResult::Unknown => panic!("Z3 cannot determine bit width of type"),
+        };
+        self.solver.pop(1);
+
+        if is_polymorphic {
+            // If something is polymorphic over bit widths, it must be
+            // polymorphic over the same bit width as the whole
+            // optimization.
+            self.solver.push();
+            self.solver
+                .assert(&ty_var.width._eq(&self.root_ty.as_ref().unwrap().width));
+            match self.solver.check() {
+                z3::SatResult::Sat => {}
+                z3::SatResult::Unsat => panic!(
+                    "constant is bit width polymorphic, but not over the optimization's root \
+                     width"
+                ),
+                z3::SatResult::Unknown => panic!("Z3 cannot determine bit width of type"),
+            };
+            self.solver.pop(1);
+
+            BitWidth::Polymorphic
+        } else {
+            BitWidth::try_from(bit_width).unwrap()
+        }
+    }
+
+    fn op_ty_var_to_kind(&self, ty_var: &TypeVar<'a>) -> Kind {
+        for (predicate, kind) in [
+            (Self::is_int as fn(_, _) -> _, Kind::Int),
+            (Self::is_bool, Kind::Bool),
+            (Self::is_cpu_flags, Kind::CpuFlags),
+            (Self::is_void, Kind::Void),
+        ]
+        .iter()
+        {
+            self.solver.push();
+            self.solver.assert(&predicate(self, ty_var));
+            match self.solver.check() {
+                z3::SatResult::Sat => {
+                    self.solver.pop(1);
+                    return *kind;
+                }
+                z3::SatResult::Unsat => {
+                    self.solver.pop(1);
+                    continue;
+                }
+                z3::SatResult::Unknown => panic!("Z3 cannot determine the type's kind"),
+            }
+        }
+
+        // This would only happen if given a `TypeVar` whose kind was a
+        // condition code, but we only use this function for RHS operations,
+        // which cannot be condition codes.
+        panic!("cannot convert type variable's kind to `peepmatic_runtime::type::Kind`")
     }
 }
 
@@ -556,8 +708,9 @@ pub(crate) struct TypeVar<'a> {
 
 fn verify_optimization(z3: &z3::Context, opt: &Optimization) -> VerifyResult<()> {
     let mut context = TypingContext::new(z3);
-    collect_type_constraints(&mut context, &opt)?;
+    collect_type_constraints(&mut context, opt)?;
     context.type_check(opt.span)?;
+    context.assign_types();
 
     // TODO: add another pass here to check for counter-examples to this
     // optimization, i.e. inputs where the LHS and RHS are not equivalent.
@@ -572,6 +725,7 @@ fn collect_type_constraints<'a>(
     use crate::traversals::TraversalEvent as TE;
 
     let lhs_ty = context.new_type_var();
+    context.root_ty = Some(lhs_ty.clone());
     let rhs_ty = context.new_type_var();
     context.assert_type_eq(
         opt.span,
@@ -593,23 +747,13 @@ fn collect_type_constraints<'a>(
                 let id = context.get_or_create_type_var_for_id(*id);
                 context.assert_type_eq(*span, expected_types.last().unwrap(), &id, None);
             }
-            (
-                TE::Enter,
-                DynAstRef::Pattern(Pattern::ValueLiteral(ValueLiteral::Integer(Integer {
-                    span,
-                    ..
-                }))),
-            ) => {
-                context.assert_is_integer(*span, expected_types.last().unwrap());
+            (TE::Enter, DynAstRef::Pattern(Pattern::ValueLiteral(ValueLiteral::Integer(i)))) => {
+                let ty = expected_types.last().unwrap();
+                context.remember_integer_literal(i, ty.clone());
             }
-            (
-                TE::Enter,
-                DynAstRef::Pattern(Pattern::ValueLiteral(ValueLiteral::Boolean(Boolean {
-                    span,
-                    ..
-                }))),
-            ) => {
-                context.assert_is_bool(*span, expected_types.last().unwrap());
+            (TE::Enter, DynAstRef::Pattern(Pattern::ValueLiteral(ValueLiteral::Boolean(b)))) => {
+                let ty = expected_types.last().unwrap();
+                context.remember_boolean_literal(b, ty.clone());
             }
             (TE::Enter, DynAstRef::PatternOperation(op)) => {
                 let result_ty;
@@ -637,11 +781,11 @@ fn collect_type_constraints<'a>(
 
                 match op.operator {
                     Operator::Ireduce | Operator::Uextend | Operator::Sextend => {
-                        if op.operator_type.is_none() {
+                        if op.r#type.get().is_none() {
                             return Err(WastError::new(
                                 op.span,
-                                "`ireduce`, `sextend`, and `uextend` require an ascribed type \
-                                 (like `sextend{i64}`)"
+                                "`ireduce`, `sextend`, and `uextend` require an ascribed type, \
+                                 like `(sextend{i64} ...)`"
                                     .into(),
                             )
                             .into());
@@ -660,14 +804,18 @@ fn collect_type_constraints<'a>(
                     _ => {}
                 }
 
-                if let Some(ty) = op.operator_type {
-                    if ty.is_bool() {
-                        context.assert_is_bool(op.span, &result_ty);
-                    } else {
-                        debug_assert!(ty.is_int());
-                        context.assert_is_integer(op.span, &result_ty);
+                if let Some(ty) = op.r#type.get() {
+                    match ty.kind {
+                        Kind::Bool => context.assert_is_bool(op.span, &result_ty),
+                        Kind::Int => context.assert_is_integer(op.span, &result_ty),
+                        Kind::Void => context.assert_is_void(op.span, &result_ty),
+                        Kind::CpuFlags => {
+                            unreachable!("no syntax for ascribing CPU flags types right now")
+                        }
                     }
-                    context.assert_bit_width(op.span, &result_ty, ty.bit_width());
+                    if let Some(w) = ty.bit_width.fixed_width() {
+                        context.assert_bit_width(op.span, &result_ty, w);
+                    }
                 }
 
                 context.assert_type_eq(op.span, expected_types.last().unwrap(), &result_ty, None);
@@ -694,17 +842,13 @@ fn collect_type_constraints<'a>(
     expected_types.push(rhs_ty);
     for (event, node) in Dfs::new(&opt.rhs) {
         match (event, node) {
-            (
-                TE::Enter,
-                DynAstRef::Rhs(Rhs::ValueLiteral(ValueLiteral::Integer(Integer { span, .. }))),
-            ) => {
-                context.assert_is_integer(*span, expected_types.last().unwrap());
+            (TE::Enter, DynAstRef::Rhs(Rhs::ValueLiteral(ValueLiteral::Integer(i)))) => {
+                let ty = expected_types.last().unwrap();
+                context.remember_integer_literal(i, ty.clone());
             }
-            (
-                TE::Enter,
-                DynAstRef::Rhs(Rhs::ValueLiteral(ValueLiteral::Boolean(Boolean { span, .. }))),
-            ) => {
-                context.assert_is_bool(*span, expected_types.last().unwrap());
+            (TE::Enter, DynAstRef::Rhs(Rhs::ValueLiteral(ValueLiteral::Boolean(b)))) => {
+                let ty = expected_types.last().unwrap();
+                context.remember_boolean_literal(b, ty.clone());
             }
             (TE::Enter, DynAstRef::Rhs(Rhs::Constant(Constant { span, id })))
             | (TE::Enter, DynAstRef::Rhs(Rhs::Variable(Variable { span, id }))) => {
@@ -737,11 +881,11 @@ fn collect_type_constraints<'a>(
 
                 match op.operator {
                     Operator::Ireduce | Operator::Uextend | Operator::Sextend => {
-                        if op.operator_type.is_none() {
+                        if op.r#type.get().is_none() {
                             return Err(WastError::new(
                                 op.span,
-                                "`ireduce`, `sextend`, and `uextend` require an ascribed type \
-                                 (like `sextend{i64}`)"
+                                "`ireduce`, `sextend`, and `uextend` require an ascribed type, \
+                                 like `(sextend{i64} ...)`"
                                     .into(),
                             )
                             .into());
@@ -760,17 +904,24 @@ fn collect_type_constraints<'a>(
                     _ => {}
                 }
 
-                if let Some(ty) = op.operator_type {
-                    if ty.is_bool() {
-                        context.assert_is_bool(op.span, &result_ty);
-                    } else {
-                        debug_assert!(ty.is_int());
-                        context.assert_is_integer(op.span, &result_ty);
+                if let Some(ty) = op.r#type.get() {
+                    match ty.kind {
+                        Kind::Bool => context.assert_is_bool(op.span, &result_ty),
+                        Kind::Int => context.assert_is_integer(op.span, &result_ty),
+                        Kind::Void => context.assert_is_void(op.span, &result_ty),
+                        Kind::CpuFlags => {
+                            unreachable!("no syntax for ascribing CPU flags types right now")
+                        }
                     }
-                    context.assert_bit_width(op.span, &result_ty, ty.bit_width());
+                    if let Some(w) = ty.bit_width.fixed_width() {
+                        context.assert_bit_width(op.span, &result_ty, w);
+                    }
                 }
 
                 context.assert_type_eq(op.span, expected_types.last().unwrap(), &result_ty, None);
+                if op.r#type.get().is_none() {
+                    context.remember_rhs_operation(op, result_ty);
+                }
 
                 operand_types.reverse();
                 expected_types.extend(operand_types);

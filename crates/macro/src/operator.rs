@@ -181,6 +181,7 @@ fn create_type_methods(variants: &[OperatorVariant]) -> impl quote::ToTokens {
 
     quote! {
         /// Get the result type of this operator.
+        #[cfg(feature = "construct")]
         pub fn result_type<'a, C>(
             &self,
             context: &mut C,
@@ -195,6 +196,7 @@ fn create_type_methods(variants: &[OperatorVariant]) -> impl quote::ToTokens {
         }
 
         /// Get the immediate types of this operator.
+        #[cfg(feature = "construct")]
         pub fn immediate_types<'a, C>(
             &self,
             context: &mut C,
@@ -210,6 +212,7 @@ fn create_type_methods(variants: &[OperatorVariant]) -> impl quote::ToTokens {
         }
 
         /// Get the parameter types of this operator.
+        #[cfg(feature = "construct")]
         pub fn param_types<'a, C>(
             &self,
             context: &mut C,

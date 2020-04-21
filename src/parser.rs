@@ -47,6 +47,7 @@ The grammar for the DSL is given below:
 
 use crate::ast::*;
 use peepmatic_runtime::r#type::Type;
+use std::cell::Cell;
 use std::marker::PhantomData;
 use wast::{
     parser::{Cursor, Parse, Parser, Peek, Result as ParseResult},
@@ -200,13 +201,14 @@ impl<'a> Parse<'a> for Integer<'a> {
         p.step(|c| {
             if let Some((i, rest)) = c.integer() {
                 let (s, base) = i.val();
-                let val = i128::from_str_radix(s, base)
-                    .or_else(|_| u128::from_str_radix(s, base).map(|i| i as i128));
+                let val = i64::from_str_radix(s, base)
+                    .or_else(|_| u128::from_str_radix(s, base).map(|i| i as i64));
                 return match val {
                     Ok(value) => Ok((
                         Integer {
                             span,
                             value,
+                            bit_width: Default::default(),
                             marker: PhantomData,
                         },
                         rest,
@@ -226,6 +228,7 @@ impl<'a> Parse<'a> for Boolean<'a> {
             return Ok(Boolean {
                 span,
                 value: true,
+                bit_width: Default::default(),
                 marker: PhantomData,
             });
         }
@@ -233,6 +236,7 @@ impl<'a> Parse<'a> for Boolean<'a> {
             return Ok(Boolean {
                 span,
                 value: false,
+                bit_width: Default::default(),
                 marker: PhantomData,
             });
         }
@@ -403,14 +407,14 @@ where
         p.parens(|p| {
             let operator = p.parse()?;
 
-            let operator_type = if p.peek::<tok::left_curly>() {
+            let r#type = Cell::new(if p.peek::<tok::left_curly>() {
                 p.parse::<tok::left_curly>()?;
                 let ty = p.parse::<Type>()?;
                 p.parse::<tok::right_curly>()?;
                 Some(ty)
             } else {
                 None
-            };
+            });
 
             let mut operands = vec![];
             while p.peek::<T>() {
@@ -419,7 +423,7 @@ where
             Ok(Operation {
                 span,
                 operator,
-                operator_type,
+                r#type,
                 operands,
                 marker: PhantomData,
             })

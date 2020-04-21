@@ -9,7 +9,7 @@ use crate::cc::ConditionCode;
 use crate::integer_interner::{IntegerId, IntegerInterner};
 use crate::operator::{Operator, UnquoteOperator};
 use crate::paths::{PathId, PathInterner};
-use crate::r#type::Type;
+use crate::r#type::{BitWidth, Type};
 use serde::{Deserialize, Serialize};
 
 /// A set of linear optimizations.
@@ -173,12 +173,16 @@ pub enum Action {
     MakeIntegerConst {
         /// The constant integer value.
         value: IntegerId,
+        /// The bit width of this constant.
+        bit_width: BitWidth,
     },
 
     /// Implicitly define the n^th RHS as a boolean constant.
     MakeBooleanConst {
         /// The constant boolean value.
         value: bool,
+        /// The bit width of this constant.
+        bit_width: BitWidth,
     },
 
     /// Implicitly defint the n^th RHS as a condition code.
@@ -192,8 +196,8 @@ pub enum Action {
     MakeUnaryInst {
         /// The operand for this instruction.
         operand: RhsId,
-        /// The ascribed type for this instruction.
-        r#type: Option<Type>,
+        /// The type of this instruction's result.
+        r#type: Type,
         /// The operator for this instruction.
         operator: Operator,
     },
@@ -201,18 +205,22 @@ pub enum Action {
     /// Implicitly define the n^th RHS instruction by making a binary
     /// instruction.
     MakeBinaryInst {
-        /// The operands for this instruction.
-        operands: [RhsId; 2],
         /// The opcode for this instruction.
         operator: Operator,
+        /// The type of this instruction's result.
+        r#type: Type,
+        /// The operands for this instruction.
+        operands: [RhsId; 2],
     },
 
     /// Implicitly define the n^th RHS instruction by making a ternary
     /// instruction.
     MakeTernaryInst {
-        /// The operands for this instruction.
-        operands: [RhsId; 3],
         /// The opcode for this instruction.
         operator: Operator,
+        /// The type of this instruction's result.
+        r#type: Type,
+        /// The operands for this instruction.
+        operands: [RhsId; 3],
     },
 }

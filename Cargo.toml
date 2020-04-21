@@ -19,4 +19,4 @@ git = "https://github.com/prove-rs/z3.rs.git"
 features = ["static-link-z3"]
 
 [workspace]
-members = ["fuzz"]
+members = ["fuzz", "crates/test"]

@@ -34,6 +34,10 @@ pub enum Operator {
     #[peepmatic(immediates(iNN), params(iNN), result(iNN))]
     BandImm,
 
+    /// `bconst`
+    #[peepmatic(immediates(b1), result(bNN))]
+    Bconst,
+
     /// `bint`
     #[peepmatic(params(bNN), result(iNN))]
     Bint,

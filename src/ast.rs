@@ -23,8 +23,10 @@
 use peepmatic_macro::Ast;
 use peepmatic_runtime::{
     operator::{Operator, UnquoteOperator},
-    r#type::Type,
+    r#type::{BitWidth, Type},
 };
+use std::cell::Cell;
+use std::hash::{Hash, Hasher};
 use std::marker::PhantomData;
 use wast::Id;
 
@@ -228,23 +230,54 @@ pub enum ValueLiteral<'a> {
 }
 
 /// An integer literal.
-#[derive(Debug, Ast)]
+#[derive(Debug, PartialEq, Eq, Ast)]
 pub struct Integer<'a> {
     /// Where this `Integer` was defined.
     #[peepmatic(skip_child)]
     pub span: wast::Span,
 
     /// The integer value.
+    ///
+    /// Note that although Cranelift allows 128 bits wide values, the widest
+    /// supported constants as immediates are 64 bits.
     #[peepmatic(skip_child)]
-    pub value: i128,
+    pub value: i64,
+
+    /// The bit width of this integer.
+    ///
+    /// This is either a fixed bit width, or polymorphic over the width of the
+    /// optimization.
+    ///
+    /// This field is initialized from `None` to `Some` by the type checking
+    /// pass in `src/verify.rs`.
+    #[peepmatic(skip_child)]
+    pub bit_width: Cell<Option<BitWidth>>,
 
     #[allow(missing_docs)]
     #[peepmatic(skip_child)]
     pub marker: PhantomData<&'a ()>,
 }
 
+impl Hash for Integer<'_> {
+    fn hash<H>(&self, state: &mut H)
+    where
+        H: Hasher,
+    {
+        let Integer {
+            span,
+            value,
+            bit_width,
+            marker: _,
+        } = self;
+        span.hash(state);
+        value.hash(state);
+        let bit_width = bit_width.get();
+        bit_width.hash(state);
+    }
+}
+
 /// A boolean literal.
-#[derive(Debug, Ast)]
+#[derive(Debug, PartialEq, Eq, Ast)]
 pub struct Boolean<'a> {
     /// Where this `Boolean` was defined.
     #[peepmatic(skip_child)]
@@ -254,9 +287,37 @@ pub struct Boolean<'a> {
     #[peepmatic(skip_child)]
     pub value: bool,
 
+    /// The bit width of this boolean.
+    ///
+    /// This is either a fixed bit width, or polymorphic over the width of the
+    /// optimization.
+    ///
+    /// This field is initialized from `None` to `Some` by the type checking
+    /// pass in `src/verify.rs`.
+    #[peepmatic(skip_child)]
+    pub bit_width: Cell<Option<BitWidth>>,
+
     #[allow(missing_docs)]
     #[peepmatic(skip_child)]
     pub marker: PhantomData<&'a ()>,
+}
+
+impl Hash for Boolean<'_> {
+    fn hash<H>(&self, state: &mut H)
+    where
+        H: Hasher,
+    {
+        let Boolean {
+            span,
+            value,
+            bit_width,
+            marker: _,
+        } = self;
+        span.hash(state);
+        value.hash(state);
+        let bit_width = bit_width.get();
+        bit_width.hash(state);
+    }
 }
 
 /// A condition code.
@@ -322,9 +383,9 @@ where
     #[peepmatic(skip_child)]
     pub operator: Operator,
 
-    /// An optional ascribed type for the operator.
+    /// An optional ascribed or inferred type for the operator.
     #[peepmatic(skip_child)]
-    pub operator_type: Option<Type>,
+    pub r#type: Cell<Option<Type>>,
 
     /// This operation's operands.
     ///

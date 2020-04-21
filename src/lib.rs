@@ -22,10 +22,11 @@ pub use self::{
     ast::*, automatize::*, linear_passes::*, linearize::*, parser::*, traversals::*, verify::*,
 };
 
+use peepmatic_runtime::PeepholeOptimizations;
 use std::fs;
 use std::path::Path;
 
-/// Compile the given DSL file into a peephole optimizer!
+/// Compile the given DSL file into a compact peephole optimizations automaton!
 ///
 /// ## Example
 ///
@@ -33,11 +34,11 @@ use std::path::Path;
 /// # fn main() -> anyhow::Result<()> {
 /// use std::path::Path;
 ///
-/// let peephole_optimizer = peepmatic::compile_file(Path::new(
+/// let peep_opts = peepmatic::compile_file(Path::new(
 ///     "path/to/optimizations.peepmatic"
 /// ))?;
 ///
-/// // Use the peephole optimizer or serialize it into bytes here...
+/// // Use the peephole optimizations or serialize them into bytes here...
 /// # Ok(())
 /// # }
 /// ```
@@ -48,12 +49,13 @@ use std::path::Path;
 /// `PEEPMATIC_DOT` environment variable to a file path. A [GraphViz
 /// Dot]((https://graphviz.gitlab.io/_pages/pdf/dotguide.pdf)) file showing the
 /// peephole optimizer's automaton will be written to that file path.
-pub fn compile_file(filename: &Path) -> anyhow::Result<peepmatic_runtime::PeepholeOptimizer> {
+pub fn compile_file(filename: &Path) -> anyhow::Result<PeepholeOptimizations> {
     let source = fs::read_to_string(filename)?;
     compile_str(&source, filename)
 }
 
-/// Compile the given DSL source text down into a peephole optimizer.
+/// Compile the given DSL source text down into a compact peephole optimizations
+/// automaton.
 ///
 /// This is like [compile_file][crate::compile_file] but you bring your own file
 /// I/O.
@@ -66,7 +68,7 @@ pub fn compile_file(filename: &Path) -> anyhow::Result<peepmatic_runtime::Peepho
 /// # fn main() -> anyhow::Result<()> {
 /// use std::path::Path;
 ///
-/// let peephole_optimizer = peepmatic::compile_str(
+/// let peep_opts = peepmatic::compile_str(
 ///     "
 ///     (=> (iadd $x 0) $x)
 ///     (=> (imul $x 0) 0)
@@ -75,7 +77,7 @@ pub fn compile_file(filename: &Path) -> anyhow::Result<peepmatic_runtime::Peepho
 ///     Path::new("my-optimizations"),
 /// )?;
 ///
-/// // Use the peephole optimizer or serialize it into bytes here...
+/// // Use the peephole optimizations or serialize them into bytes here...
 /// # Ok(())
 /// # }
 /// ```
@@ -86,10 +88,7 @@ pub fn compile_file(filename: &Path) -> anyhow::Result<peepmatic_runtime::Peepho
 /// `PEEPMATIC_DOT` environment variable to a file path. A [GraphViz
 /// Dot]((https://graphviz.gitlab.io/_pages/pdf/dotguide.pdf)) file showing the
 /// peephole optimizer's automaton will be written to that file path.
-pub fn compile_str(
-    source: &str,
-    filename: &Path,
-) -> anyhow::Result<peepmatic_runtime::PeepholeOptimizer> {
+pub fn compile_str(source: &str, filename: &Path) -> anyhow::Result<PeepholeOptimizations> {
     let buf = wast::parser::ParseBuffer::new(source).map_err(|mut e| {
         e.set_path(filename);
         e.set_text(source);
@@ -128,7 +127,7 @@ pub fn compile_str(
         }
     }
 
-    Ok(peepmatic_runtime::PeepholeOptimizer {
+    Ok(PeepholeOptimizations {
         paths,
         integers,
         automata,
