@@ -1,4 +1,4 @@
-//! `serde::Serialize` and `serde::Deserialize` implementations for `Automata`.
+//! `serde::Serialize` and `serde::Deserialize` implementations for `Automaton`.
 //!
 //! Rather than prefix each serialized field with which field it is, we always
 //! serialize fields in alphabetical order. Make sure to maintain this if you
@@ -7,7 +7,7 @@
 //! Each time you add/remove a field, or change serialization in any other way,
 //! make sure to bump `SERIALIZATION_VERSION`.
 
-use crate::{Automata, Output, State};
+use crate::{Automaton, Output, State};
 use serde::{
     de::{self, Deserializer, SeqAccess, Visitor},
     ser::SerializeTupleStruct,
@@ -74,7 +74,7 @@ impl<'de> Visitor<'de> for U32Visitor {
     }
 }
 
-impl<TAlphabet, TState, TOutput> Serialize for Automata<TAlphabet, TState, TOutput>
+impl<TAlphabet, TState, TOutput> Serialize for Automaton<TAlphabet, TState, TOutput>
 where
     TAlphabet: Serialize + Clone + Eq + Hash + Ord,
     TState: Serialize + Clone + Eq + Hash,
@@ -84,14 +84,14 @@ where
     where
         S: Serializer,
     {
-        let Automata {
+        let Automaton {
             final_states,
             start_state,
             state_data,
             transitions,
         } = self;
 
-        let mut s = serializer.serialize_tuple_struct("Automata", 5)?;
+        let mut s = serializer.serialize_tuple_struct("Automaton", 5)?;
         s.serialize_field(&SERIALIZATION_VERSION)?;
         s.serialize_field(final_states)?;
         s.serialize_field(start_state)?;
@@ -101,7 +101,7 @@ where
     }
 }
 
-impl<'de, TAlphabet, TState, TOutput> Deserialize<'de> for Automata<TAlphabet, TState, TOutput>
+impl<'de, TAlphabet, TState, TOutput> Deserialize<'de> for Automaton<TAlphabet, TState, TOutput>
 where
     TAlphabet: 'de + Deserialize<'de> + Clone + Eq + Hash + Ord,
     TState: 'de + Deserialize<'de> + Clone + Eq + Hash,
@@ -112,16 +112,16 @@ where
         D: Deserializer<'de>,
     {
         deserializer.deserialize_tuple_struct(
-            "Automata",
+            "Automaton",
             5,
-            AutomataVisitor {
+            AutomatonVisitor {
                 phantom: PhantomData,
             },
         )
     }
 }
 
-struct AutomataVisitor<'de, TAlphabet, TState, TOutput>
+struct AutomatonVisitor<'de, TAlphabet, TState, TOutput>
 where
     TAlphabet: 'de + Deserialize<'de> + Clone + Eq + Hash + Ord,
     TState: 'de + Deserialize<'de> + Clone + Eq + Hash,
@@ -131,16 +131,16 @@ where
 }
 
 impl<'de, TAlphabet, TState, TOutput> Visitor<'de>
-    for AutomataVisitor<'de, TAlphabet, TState, TOutput>
+    for AutomatonVisitor<'de, TAlphabet, TState, TOutput>
 where
     TAlphabet: 'de + Deserialize<'de> + Clone + Eq + Hash + Ord,
     TState: 'de + Deserialize<'de> + Clone + Eq + Hash,
     TOutput: 'de + Deserialize<'de> + Output,
 {
-    type Value = Automata<TAlphabet, TState, TOutput>;
+    type Value = Automaton<TAlphabet, TState, TOutput>;
 
     fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.write_str("Automata")
+        f.write_str("Automaton")
     }
 
     fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
@@ -155,30 +155,30 @@ where
                     &self,
                 ));
             }
-            None => return Err(de::Error::invalid_length(0, &"Automata expects 5 elements")),
+            None => return Err(de::Error::invalid_length(0, &"Automaton expects 5 elements")),
         }
 
         let final_states = match seq.next_element::<BTreeMap<State, TOutput>>()? {
             Some(x) => x,
-            None => return Err(de::Error::invalid_length(1, &"Automata expects 5 elements")),
+            None => return Err(de::Error::invalid_length(1, &"Automaton expects 5 elements")),
         };
 
         let start_state = match seq.next_element::<State>()? {
             Some(x) => x,
-            None => return Err(de::Error::invalid_length(2, &"Automata expects 5 elements")),
+            None => return Err(de::Error::invalid_length(2, &"Automaton expects 5 elements")),
         };
 
         let state_data = match seq.next_element::<Vec<Option<TState>>>()? {
             Some(x) => x,
-            None => return Err(de::Error::invalid_length(3, &"Automata expects 5 elements")),
+            None => return Err(de::Error::invalid_length(3, &"Automaton expects 5 elements")),
         };
 
         let transitions = match seq.next_element::<Vec<BTreeMap<TAlphabet, (State, TOutput)>>>()? {
             Some(x) => x,
-            None => return Err(de::Error::invalid_length(4, &"Automata expects 5 elements")),
+            None => return Err(de::Error::invalid_length(4, &"Automaton expects 5 elements")),
         };
 
-        let automata = Automata {
+        let automata = Automaton {
             final_states,
             start_state,
             state_data,

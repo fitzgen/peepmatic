@@ -6,7 +6,7 @@ use crate::integer_interner::IntegerInterner;
 use crate::linear::{Action, MatchOp};
 use crate::optimizer::PeepholeOptimizer;
 use crate::paths::PathInterner;
-use peepmatic_automata::Automata;
+use peepmatic_automata::Automaton;
 use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "construct")]
@@ -29,7 +29,7 @@ pub struct PeepholeOptimizations {
 
     /// The underlying automata for matching optimizations' left-hand sides, and
     /// building up the corresponding right-hand side.
-    pub automata: Automata<Option<u32>, MatchOp, Vec<Action>>,
+    pub automata: Automaton<Option<u32>, MatchOp, Vec<Action>>,
 }
 
 impl PeepholeOptimizations {

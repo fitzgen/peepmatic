@@ -12,7 +12,7 @@ serde = { version = "1.0.106", optional = true }
 
 [features]
 # Enable support for generating GraphViz Dot files that can be used to visually
-# render an automata.
+# render an automaton.
 #
 # https://en.wikipedia.org/wiki/DOT_%28graph_description_language%29
 dot = []

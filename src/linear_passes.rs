@@ -208,7 +208,7 @@ pub(crate) fn is_sorted_lexicographically(opts: &linear::Optimizations) -> bool 
 /// Opcode@0 --iadd--> IsConst@0.1 --true--> [Optimization 1]
 /// ```
 ///
-/// If we naively combined these into an automata, first of all, it would be
+/// If we naively combined these into an automaton, first of all, it would be
 /// nondeterministic because there are multiple states to move to after we find
 /// that the root instruction's opcode is `iadd`. Secondly, if we inpect the
 /// opcode of the root's second child (or its second child's second child) and

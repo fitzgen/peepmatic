@@ -4,14 +4,14 @@
 //!
 //! **This module only exists when the `"dot"` cargo feature is enabled.**
 
-use crate::{Automata, Output, State};
+use crate::{Automaton, Output, State};
 use std::fmt::{Debug, Display};
 use std::fs;
 use std::hash::Hash;
 use std::io::{self, Write};
 use std::path::Path;
 
-/// Format the user-provided bits of an `Automata` for Graphviz Dot output.
+/// Format the user-provided bits of an `Automaton` for Graphviz Dot output.
 ///
 /// There are two provided implementations of `DotFmt`:
 ///
@@ -53,13 +53,13 @@ pub trait DotFmt<TAlphabet, TState, TOutput> {
     fn fmt_output(&self, w: &mut impl Write, output: &TOutput) -> io::Result<()>;
 }
 
-impl<TAlphabet, TState, TOutput> Automata<TAlphabet, TState, TOutput>
+impl<TAlphabet, TState, TOutput> Automaton<TAlphabet, TState, TOutput>
 where
     TAlphabet: Clone + Eq + Hash + Ord,
     TState: Clone + Eq + Hash,
     TOutput: Output,
 {
-    /// Write this `Automata` out as a [GraphViz
+    /// Write this `Automaton` out as a [GraphViz
     /// Dot](https://graphviz.gitlab.io/_pages/pdf/dotguide.pdf) file at the
     /// given path.
     ///
@@ -78,7 +78,7 @@ where
         Ok(())
     }
 
-    /// Write this `Automata` out to the given write-able as a [GraphViz
+    /// Write this `Automaton` out to the given write-able as a [GraphViz
     /// Dot](https://graphviz.gitlab.io/_pages/pdf/dotguide.pdf) file.
     ///
     /// The `formatter` parameter controls how `TAlphabet`, `TState`, and
@@ -156,7 +156,7 @@ where
     }
 }
 
-/// Format an `Automata`'s `TAlphabet`, `TState`, and `TOutput` with their
+/// Format an `Automaton`'s `TAlphabet`, `TState`, and `TOutput` with their
 /// `std::fmt::Debug` implementations.
 #[derive(Debug)]
 pub struct DebugDotFmt;
@@ -186,7 +186,7 @@ where
     }
 }
 
-/// Format an `Automata`'s `TAlphabet`, `TState`, and `TOutput` with their
+/// Format an `Automaton`'s `TAlphabet`, `TState`, and `TOutput` with their
 /// `std::fmt::Display` implementations.
 #[derive(Debug)]
 pub struct DisplayDotFmt;

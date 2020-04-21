@@ -1,12 +1,12 @@
-//! Compile a set of linear optimizations into an automata.
+//! Compile a set of linear optimizations into an automaton.
 
-use peepmatic_automata::{Automata, Builder};
+use peepmatic_automata::{Automaton, Builder};
 use peepmatic_runtime::linear;
 
 /// Construct an automaton from a set of linear optimizations.
 pub fn automatize(
     opts: &linear::Optimizations,
-) -> Automata<Option<u32>, linear::MatchOp, Vec<linear::Action>> {
+) -> Automaton<Option<u32>, linear::MatchOp, Vec<linear::Action>> {
     debug_assert!(crate::linear_passes::is_sorted_lexicographically(opts));
 
     let mut builder = Builder::<Option<u32>, linear::MatchOp, Vec<linear::Action>>::new();

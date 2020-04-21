@@ -286,8 +286,7 @@ where
         }
     }
 
-    /// Finish building this transducer automata and return the constructed
-    /// `Automata`.
+    /// Finish building this transducer and return the constructed `Automaton`.
     ///
     /// ## Panics
     ///
@@ -297,7 +296,7 @@ where
     /// Panics if the last insertion's
     /// [`InsertionBuilder`][crate::InsertionBuilder] did not call its
     /// [finish][crate::InsertionBuilder::finish] method.
-    pub fn finish(&mut self) -> Automata<TAlphabet, TState, TOutput> {
+    pub fn finish(&mut self) -> Automaton<TAlphabet, TState, TOutput> {
         let mut inner = self
             .inner
             .take()
@@ -312,7 +311,7 @@ where
         assert!(inner.unfinished.is_empty());
 
         // Now transpose our states and transitions into our packed,
-        // struct-of-arrays representation that we use inside `Automata`.
+        // struct-of-arrays representation that we use inside `Automaton`.
         let FrozenStateId(s) = wip_to_frozen[&wip_start];
         let start_state = State(s);
         let mut state_data = vec![None; inner.frozen.len()];
@@ -340,7 +339,7 @@ where
             }
         }
 
-        let automata = Automata {
+        let automata = Automaton {
             state_data,
             transitions,
             final_states,
@@ -350,7 +349,7 @@ where
         #[cfg(debug_assertions)]
         {
             if let Err(msg) = automata.check_representation() {
-                panic!("Automata::check_representation failed: {}", msg);
+                panic!("Automaton::check_representation failed: {}", msg);
             }
         }
 
@@ -724,21 +723,21 @@ where
 ///
 /// These are constructed via [`Builder`][crate::Builder].
 ///
-/// An `Automata` is immutable: new entries cannot be inserted and existing
+/// An `Automaton` is immutable: new entries cannot be inserted and existing
 /// entries cannot be removed.
 ///
-/// To query an `Automata`, there are two APIs:
+/// To query an `Automaton`, there are two APIs:
 ///
-/// 1. [`get`][crate::Automata::get] -- a high-level method to get the associated
+/// 1. [`get`][crate::Automaton::get] -- a high-level method to get the associated
 ///    output value of a full input sequence.
 ///
-/// 2. [`query`][crate::Automata::query] -- a low-level method to
+/// 2. [`query`][crate::Automaton::query] -- a low-level method to
 ///    incrementally query the automata. It does not require that you have the
 ///    full input sequence on hand all at once, only the next character. It also
 ///    allows you to process the output as it it built up, rather than only at
 ///    giving you the final, complete output value.
 #[derive(Debug, Clone)]
-pub struct Automata<TAlphabet, TState, TOutput>
+pub struct Automaton<TAlphabet, TState, TOutput>
 where
     TAlphabet: Clone + Eq + Hash + Ord,
     TState: Clone + Eq + Hash,
@@ -758,7 +757,7 @@ where
     start_state: State,
 }
 
-impl<TAlphabet, TState, TOutput> Automata<TAlphabet, TState, TOutput>
+impl<TAlphabet, TState, TOutput> Automaton<TAlphabet, TState, TOutput>
 where
     TAlphabet: Clone + Eq + Hash + Ord,
     TState: Clone + Eq + Hash,
@@ -767,7 +766,7 @@ where
     /// Get the output value associated with the given input sequence.
     ///
     /// Returns `None` if the input sequence is not a member of this
-    /// `Automata`'s keys. Otherwise, returns `Some(output)`.
+    /// `Automaton`'s keys. Otherwise, returns `Some(output)`.
     pub fn get<'a>(&self, input: impl IntoIterator<Item = &'a TAlphabet>) -> Option<TOutput>
     where
         TAlphabet: 'a,
@@ -786,7 +785,7 @@ where
 
     /// Create a low-level query.
     ///
-    /// This allows you to incrementally query this `Automata`, without
+    /// This allows you to incrementally query this `Automaton`, without
     /// providing the full input sequence ahead of time, and also incrementally
     /// build up the output.
     ///
@@ -805,7 +804,7 @@ where
     /// in a final state, etc.
     ///
     /// This property is `debug_assert!`ed in `Builder::finish`, and checked
-    /// when deserializing an `Automata`.
+    /// when deserializing an `Automaton`.
     ///
     /// Returns `true` if the representation is okay, `false` otherwise.
     fn check_representation(&self) -> Result<(), &'static str> {
@@ -896,9 +895,9 @@ where
     }
 }
 
-/// A low-level query of an `Automata`.
+/// A low-level query of an `Automaton`.
 ///
-/// This allows you to incrementally query an `Automata`, without providing the
+/// This allows you to incrementally query an `Automaton`, without providing the
 /// full input sequence ahead of time, and also to incrementally build up the
 /// output.
 ///
@@ -930,7 +929,7 @@ where
     TState: Clone + Eq + Hash,
     TOutput: Output,
 {
-    automata: &'a Automata<TAlphabet, TState, TOutput>,
+    automata: &'a Automaton<TAlphabet, TState, TOutput>,
     current_state: State,
 }
 

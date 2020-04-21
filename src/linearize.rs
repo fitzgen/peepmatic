@@ -1,7 +1,7 @@
 //! Convert an AST into its linear equivalent.
 //!
 //! Convert each optimization's left-hand side into a linear series of match
-//! operations. This makes it easy to create an automata, because automatas
+//! operations. This makes it easy to create an automaton, because automatas
 //! typically deal with a linear sequence of inputs. The optimization's
 //! right-hand side is built incrementally inside actions that are taken on
 //! transitions between match operations.

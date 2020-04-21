@@ -1,13 +1,13 @@
 //! Helpers for fuzzing the `peepmatic-automata` crate.
 
-use peepmatic_automata::{Automata, Builder, Output};
+use peepmatic_automata::{Automaton, Builder, Output};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::hash::Hash;
 
 fn serde_roundtrip<TAlphabet, TState, TOutput>(
-    automata: Automata<TAlphabet, TState, TOutput>,
-) -> Automata<TAlphabet, TState, TOutput>
+    automata: Automaton<TAlphabet, TState, TOutput>,
+) -> Automaton<TAlphabet, TState, TOutput>
 where
     TAlphabet: Serialize + for<'de> Deserialize<'de> + Clone + Eq + Hash + Ord,
     TState: Serialize + for<'de> Deserialize<'de> + Clone + Eq + Hash,
@@ -17,7 +17,7 @@ where
     bincode::deserialize(&encoded).expect("should deserialize OK")
 }
 
-/// Construct an automata from the the given input-output pairs, and assert
+/// Construct an automaton from the the given input-output pairs, and assert
 /// that:
 ///
 /// * Putting in each of the input strings should result in the expected output
