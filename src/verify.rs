@@ -779,6 +779,23 @@ fn collect_type_constraints<'a>(
                     .into());
                 }
 
+                for imm in op
+                    .operands
+                    .iter()
+                    .take(op.operator.immediates_arity() as usize)
+                {
+                    match imm {
+                        Pattern::ValueLiteral(_) |
+                        Pattern::Constant(_) |
+                        Pattern::Variable(_) => continue,
+                        Pattern::Operation(op) => return Err(WastError::new(
+                            op.span,
+                            "operations are invalid immediates; must be a value literal, constant, \
+                             or variable".into()
+                        ).into()),
+                    }
+                }
+
                 match op.operator {
                     Operator::Ireduce | Operator::Uextend | Operator::Sextend => {
                         if op.r#type.get().is_none() {
@@ -877,6 +894,26 @@ fn collect_type_constraints<'a>(
                         ),
                     )
                     .into());
+                }
+
+                for imm in op
+                    .operands
+                    .iter()
+                    .take(op.operator.immediates_arity() as usize)
+                {
+                    match imm {
+                        Rhs::ValueLiteral(_)
+                        | Rhs::Constant(_)
+                        | Rhs::Variable(_)
+                        | Rhs::Unquote(_) => continue,
+                        Rhs::Operation(op) => return Err(WastError::new(
+                            op.span,
+                            "operations are invalid immediates; must be a value literal, unquote, \
+                             constant, or variable"
+                                .into(),
+                        )
+                        .into()),
+                    }
                 }
 
                 match op.operator {
@@ -1327,4 +1364,13 @@ mod tests {
     verify_err!(reduce_extend_5, "(=> (uextend{i64} (ireduce{i64} -1)) 0)");
     verify_err!(reduce_extend_6, "(=> (sextend{i32} (ireduce{i64} -1)) 0)");
     verify_err!(reduce_extend_7, "(=> (uextend{i32} (ireduce{i64} -1)) 0)");
+
+    verify_err!(
+        using_an_operation_as_an_immediate_in_lhs,
+        "(=> (iadd_imm (imul $x $y) $z) 0)"
+    );
+    verify_err!(
+        using_an_operation_as_an_immediate_in_rhs,
+        "(=> (iadd (imul $x $y) $z) (iadd_imm (imul $x $y) $z))"
+    );
 }
