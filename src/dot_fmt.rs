@@ -83,8 +83,7 @@ impl DotFmt<Option<u32>, linear::MatchOp, Vec<linear::Action>> for PeepholeDotFm
 
         for a in actions {
             match a {
-                BindLhs { id, path } => write!(w, "$lhs{} = bind-lhs @ {}<br/>", id.0, p(path))?,
-                GetLhsBinding { id } => write!(w, "get-lhs-binding $lhs{}<br/>", id.0)?,
+                GetLhs { path } => write!(w, "get-lhs @ {}<br/>", p(path))?,
                 UnaryUnquote { operator, operand } => {
                     write!(w, "eval {} $rhs{}<br/>", operator, operand.0)?
                 }

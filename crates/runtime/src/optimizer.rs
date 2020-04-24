@@ -113,21 +113,12 @@ where
         for action in actions.drain(..) {
             log::trace!("Evaluating action: {:?}", action);
             match action {
-                Action::BindLhs { id, path } => {
+                Action::GetLhs { path } => {
                     let path = self.peep_opt.paths.lookup(path);
                     let lhs = self
                         .instr_set
                         .get_part_at_path(context, root, path)
                         .expect("should always get part at path OK by the time it is bound");
-                    debug_assert_eq!(
-                        id.0 as usize,
-                        self.left_hand_sides.len(),
-                        "we should bind the LHS ids in order"
-                    );
-                    self.left_hand_sides.push(lhs);
-                }
-                Action::GetLhsBinding { id } => {
-                    let lhs = self.left_hand_sides[id.0 as usize];
                     self.right_hand_sides.push(lhs);
                 }
                 Action::UnaryUnquote { operator, operand } => {

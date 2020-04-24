@@ -137,20 +137,11 @@ pub struct RhsId(pub u32);
 /// An action to perform when transitioning between states in the automata.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Action {
-    /// Bind `id = path` in the left-hand side scope.
-    BindLhs {
-        /// The canonicalized id being bound.
-        id: LhsId,
-        /// The path to the instruction or value.
-        path: PathId,
-    },
-
     /// Implicitly define the n^th built up RHS instruction as something from
     /// the left-hand side.
-    GetLhsBinding {
-        /// The thing from the left-hand side that is being reused in the
-        /// right-hand side.
-        id: LhsId,
+    GetLhs {
+        /// The path to the instruction or value.
+        path: PathId,
     },
 
     /// Implicitly define the n^th RHS instruction as the result of the
