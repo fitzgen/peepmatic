@@ -127,6 +127,14 @@ impl Program {
     }
 
     pub fn replace_instruction(&mut self, old: Instruction, new: Instruction) {
+        log::debug!("replacing {:?} with {:?}", old, new);
+
+        let old = self.resolve(old);
+        let new = self.resolve(new);
+        if old == new {
+            return;
+        }
+
         let mut replacements = self.replacements.borrow_mut();
         let existing_replacement = replacements.insert(old, new);
         assert!(existing_replacement.is_none());
@@ -140,8 +148,13 @@ impl Program {
         let mut replacements_followed = 0;
         let mut resolved = inst;
         while let Some(i) = replacements.get(&resolved).cloned() {
+            log::trace!("resolving replaced instruction: {:?} -> {:?}", resolved, i);
             replacements_followed += 1;
-            assert!(replacements_followed <= replacements.len());
+            assert!(
+                replacements_followed <= replacements.len(),
+                "cyclic replacements"
+            );
+
             resolved = i;
             continue;
         }
@@ -306,7 +319,6 @@ impl<'a> InstructionSet<'a> for TestIsa {
         new: Part<Instruction>,
     ) -> Instruction {
         log::debug!("replace_instruction({:?}, {:?})", old, new);
-        let old = program.resolve(old);
         let new = program.part_to_instruction(old, new).unwrap();
         program.replace_instruction(old, new);
         new

@@ -332,4 +332,14 @@ mod tests {
             ",
         );
     }
+
+    #[test]
+    fn regression_9() {
+        interp(
+            b"
+            (=> (when $x) $x)
+            (=> (trapnz $x) (trapnz $x))
+            ",
+        );
+    }
 }
