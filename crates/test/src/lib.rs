@@ -11,10 +11,10 @@ use peepmatic_runtime::{
     r#type::{BitWidth, Kind, Type},
 };
 use std::cell::RefCell;
-use std::collections::HashMap;
-use std::convert::{TryFrom, TryInto};
+use std::collections::BTreeMap;
+use std::convert::TryFrom;
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 pub struct Instruction(pub usize);
 
 #[derive(Debug)]
@@ -76,8 +76,8 @@ impl TryFrom<Part<Instruction>> for Immediate {
 #[derive(Debug, Default)]
 pub struct Program {
     instr_counter: usize,
-    instruction_data: HashMap<Instruction, InstructionData>,
-    replacements: RefCell<HashMap<Instruction, Instruction>>,
+    instruction_data: BTreeMap<Instruction, InstructionData>,
+    replacements: RefCell<BTreeMap<Instruction, Instruction>>,
 }
 
 impl Program {
@@ -120,6 +120,10 @@ impl Program {
             .into_iter()
             .zip(b.arguments.clone().into_iter())
             .all(|(a, b)| self.structurally_eq(a, b))
+    }
+
+    pub fn instructions(&self) -> impl Iterator<Item = (Instruction, &InstructionData)> {
+        self.instruction_data.iter().map(|(k, v)| (*k, v))
     }
 
     pub fn replace_instruction(&mut self, old: Instruction, new: Instruction) {
@@ -370,7 +374,7 @@ impl<'a> InstructionSet<'a> for TestIsa {
             }
             1 => {
                 assert_eq!(operator.params_arity(), 0);
-                (vec![a.try_into().unwrap()], vec![])
+                (vec![program.part_to_immediate(a).unwrap()], vec![])
             }
             _ => unreachable!(),
         };

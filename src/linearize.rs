@@ -184,7 +184,7 @@ fn linearize_optimization(
                     .actions
                     .push(linear::Action::BindLhs { id, path });
                 increments.push(linear::Increment {
-                    operation: linear::MatchOp::BitWidth { id },
+                    operation: linear::MatchOp::BitWidth { path },
                     expected: Some(w as u32),
                     actions: vec![],
                 });
@@ -197,10 +197,6 @@ fn linearize_optimization(
     for pre in &opt.lhs.preconditions {
         increments.push(pre.to_linear_increment(&lhs_canonicalizer));
     }
-
-    // Finally, 99.99% of `Nop` matching operations are unnecessary. Do a quick
-    // pass to remove them.
-    remove_unnecessary_nops(&mut increments);
 
     linear::Optimization { increments }
 }
@@ -593,26 +589,6 @@ impl<'a> RhsBuilder<'a> {
     }
 }
 
-/// 99.99% of nops are unnecessary. They're only needed for when a LHS pattern
-/// is just a variable, and that's it. However, it is easier to have basically
-/// unused nop matching operations for the DSL's edge-cases than it is to try
-/// and statically eliminate their existence completely. So we just emit nop
-/// match operations for all variable patterns, and then in this post-processing
-/// pass, we fuse them and their actions with their preceding increment.
-fn remove_unnecessary_nops(increments: &mut Vec<linear::Increment>) {
-    if increments.len() < 2 {
-        debug_assert!(!increments.is_empty());
-        return;
-    }
-
-    for i in (1..increments.len()).rev() {
-        if let linear::MatchOp::Nop = increments[i].operation {
-            let nop = increments.remove(i);
-            increments[i - 1].actions.extend(nop.actions);
-        }
-    }
-}
-
 impl Precondition<'_> {
     /// Convert this precondition into a `linear::Increment`.
     fn to_linear_increment(&self, lhs_canonicalizer: &LhsCanonicalizer) -> linear::Increment {
@@ -622,9 +598,9 @@ impl Precondition<'_> {
                     ConstraintOperand::Constant(Constant { id, .. }) => id,
                     _ => unreachable!("checked in verification"),
                 };
-                let id = lhs_canonicalizer.get(&id);
+                let path = lhs_canonicalizer.first_occurrence(&id);
                 linear::Increment {
-                    operation: linear::MatchOp::IsPowerOfTwo { id },
+                    operation: linear::MatchOp::IsPowerOfTwo { path },
                     expected: Some(1),
                     actions: vec![],
                 }
@@ -635,7 +611,7 @@ impl Precondition<'_> {
                     | ConstraintOperand::Variable(Variable { id, .. }) => id,
                     _ => unreachable!("checked in verification"),
                 };
-                let id = lhs_canonicalizer.get(&id);
+                let path = lhs_canonicalizer.first_occurrence(&id);
 
                 let width = match &self.operands[1] {
                     ConstraintOperand::ValueLiteral(ValueLiteral::Integer(Integer {
@@ -648,7 +624,7 @@ impl Precondition<'_> {
                 debug_assert!((width as u8).is_power_of_two());
 
                 linear::Increment {
-                    operation: linear::MatchOp::BitWidth { id },
+                    operation: linear::MatchOp::BitWidth { path },
                     expected: Some(width as u32),
                     actions: vec![],
                 }
@@ -659,9 +635,9 @@ impl Precondition<'_> {
                     | ConstraintOperand::Variable(Variable { id, .. }) => id,
                     _ => unreachable!("checked in verification"),
                 };
-                let id = lhs_canonicalizer.get(&id);
+                let path = lhs_canonicalizer.first_occurrence(&id);
                 linear::Increment {
-                    operation: linear::MatchOp::FitsInNativeWord { id },
+                    operation: linear::MatchOp::FitsInNativeWord { path },
                     expected: Some(1),
                     actions: vec![],
                 }
@@ -697,8 +673,14 @@ impl Pattern<'_> {
                 if lhs_canonicalizer.is_in_scope(id)
                     && lhs_canonicalizer.first_occurrence(id) != path
                 {
-                    let id = lhs_canonicalizer.get(id);
-                    (linear::MatchOp::Eq { id, path }, Some(1))
+                    let path_b = lhs_canonicalizer.first_occurrence(id);
+                    (
+                        linear::MatchOp::Eq {
+                            path_a: path,
+                            path_b,
+                        },
+                        Some(1),
+                    )
                 } else {
                     (linear::MatchOp::IsConst { path }, Some(1))
                 }
@@ -707,8 +689,14 @@ impl Pattern<'_> {
                 if lhs_canonicalizer.is_in_scope(id)
                     && lhs_canonicalizer.first_occurrence(id) != path
                 {
-                    let id = lhs_canonicalizer.get(id);
-                    (linear::MatchOp::Eq { id, path }, Some(1))
+                    let path_b = lhs_canonicalizer.first_occurrence(id);
+                    (
+                        linear::MatchOp::Eq {
+                            path_a: path,
+                            path_b,
+                        },
+                        Some(1),
+                    )
                 } else {
                     (linear::MatchOp::Nop, None)
                 }
@@ -723,6 +711,7 @@ mod tests {
     use super::*;
     use peepmatic_runtime::{
         integer_interner::IntegerId,
+        linear::{Action::*, MatchOp::*},
         operator::Operator,
         r#type::{BitWidth, Kind, Type},
     };
@@ -786,30 +775,35 @@ mod tests {
             linear::Optimization {
                 increments: vec![
                     linear::Increment {
-                        operation: linear::MatchOp::Opcode { path: p(&[0]) },
+                        operation: Opcode { path: p(&[0]) },
                         expected: Some(Operator::Imul as _),
                         actions: vec![
-                            linear::Action::BindLhs {
+                            BindLhs {
                                 id: linear::LhsId(0),
                                 path: p(&[0, 0]),
                             },
-                            linear::Action::GetLhsBinding {
+                            GetLhsBinding {
                                 id: linear::LhsId(0),
                             },
                         ],
                     },
                     linear::Increment {
-                        operation: linear::MatchOp::IsConst { path: p(&[0, 1]) },
+                        operation: Nop,
+                        expected: None,
+                        actions: vec![],
+                    },
+                    linear::Increment {
+                        operation: IsConst { path: p(&[0, 1]) },
                         expected: Some(1),
                         actions: vec![
-                            linear::Action::BindLhs {
+                            BindLhs {
                                 id: linear::LhsId(1),
                                 path: p(&[0, 1]),
                             },
-                            linear::Action::GetLhsBinding {
+                            GetLhsBinding {
                                 id: linear::LhsId(1),
                             },
-                            linear::Action::MakeBinaryInst {
+                            MakeBinaryInst {
                                 operator: Operator::Ishl,
                                 r#type: Type {
                                     kind: Kind::Int,
@@ -820,9 +814,7 @@ mod tests {
                         ],
                     },
                     linear::Increment {
-                        operation: linear::MatchOp::IsPowerOfTwo {
-                            id: linear::LhsId(1),
-                        },
+                        operation: IsPowerOfTwo { path: p(&[0, 1]) },
                         expected: Some(1),
                         actions: vec![],
                     },
@@ -837,14 +829,14 @@ mod tests {
         |p: &mut dyn FnMut(&[u8]) -> PathId, i: &mut dyn FnMut(u64) -> IntegerId| {
             linear::Optimization {
                 increments: vec![linear::Increment {
-                    operation: linear::MatchOp::Nop,
+                    operation: Nop,
                     expected: None,
                     actions: vec![
-                        linear::Action::BindLhs {
+                        BindLhs {
                             id: linear::LhsId(0),
                             path: p(&[0]),
                         },
-                        linear::Action::GetLhsBinding {
+                        GetLhsBinding {
                             id: linear::LhsId(0),
                         },
                     ],
@@ -859,14 +851,14 @@ mod tests {
         |p: &mut dyn FnMut(&[u8]) -> PathId, i: &mut dyn FnMut(u64) -> IntegerId| {
             linear::Optimization {
                 increments: vec![linear::Increment {
-                    operation: linear::MatchOp::IsConst { path: p(&[0]) },
+                    operation: IsConst { path: p(&[0]) },
                     expected: Some(1),
                     actions: vec![
-                        linear::Action::BindLhs {
+                        BindLhs {
                             id: linear::LhsId(0),
                             path: p(&[0]),
                         },
-                        linear::Action::GetLhsBinding {
+                        GetLhsBinding {
                             id: linear::LhsId(0),
                         },
                     ],
@@ -881,9 +873,9 @@ mod tests {
         |p: &mut dyn FnMut(&[u8]) -> PathId, i: &mut dyn FnMut(u64) -> IntegerId| {
             linear::Optimization {
                 increments: vec![linear::Increment {
-                    operation: linear::MatchOp::BooleanValue { path: p(&[0]) },
+                    operation: BooleanValue { path: p(&[0]) },
                     expected: Some(1),
-                    actions: vec![linear::Action::MakeBooleanConst {
+                    actions: vec![MakeBooleanConst {
                         value: true,
                         bit_width: BitWidth::Polymorphic,
                     }],
@@ -898,9 +890,9 @@ mod tests {
         |p: &mut dyn FnMut(&[u8]) -> PathId, i: &mut dyn FnMut(u64) -> IntegerId| {
             linear::Optimization {
                 increments: vec![linear::Increment {
-                    operation: linear::MatchOp::IntegerValue { path: p(&[0]) },
+                    operation: IntegerValue { path: p(&[0]) },
                     expected: Some(i(5).into()),
-                    actions: vec![linear::Action::MakeIntegerConst {
+                    actions: vec![MakeIntegerConst {
                         value: i(5),
                         bit_width: BitWidth::Polymorphic,
                     }],
@@ -916,22 +908,22 @@ mod tests {
             linear::Optimization {
                 increments: vec![
                     linear::Increment {
-                        operation: linear::MatchOp::Opcode { path: p(&[0]) },
+                        operation: Opcode { path: p(&[0]) },
                         expected: Some(Operator::Iconst as _),
                         actions: vec![],
                     },
                     linear::Increment {
-                        operation: linear::MatchOp::IsConst { path: p(&[0, 0]) },
+                        operation: IsConst { path: p(&[0, 0]) },
                         expected: Some(1),
                         actions: vec![
-                            linear::Action::BindLhs {
+                            BindLhs {
                                 id: linear::LhsId(0),
                                 path: p(&[0, 0]),
                             },
-                            linear::Action::GetLhsBinding {
+                            GetLhsBinding {
                                 id: linear::LhsId(0),
                             },
-                            linear::Action::MakeUnaryInst {
+                            MakeUnaryInst {
                                 operator: Operator::Iconst,
                                 r#type: Type {
                                     kind: Kind::Int,
@@ -953,30 +945,35 @@ mod tests {
             linear::Optimization {
                 increments: vec![
                     linear::Increment {
-                        operation: linear::MatchOp::Opcode { path: p(&[0]) },
+                        operation: Opcode { path: p(&[0]) },
                         expected: Some(Operator::Bor as _),
                         actions: vec![
-                            linear::Action::BindLhs {
+                            BindLhs {
                                 id: linear::LhsId(0),
                                 path: p(&[0, 0]),
                             },
-                            linear::Action::GetLhsBinding {
+                            GetLhsBinding {
                                 id: linear::LhsId(0),
                             },
                         ],
                     },
                     linear::Increment {
-                        operation: linear::MatchOp::Opcode { path: p(&[0, 1]) },
+                        operation: Nop,
+                        expected: None,
+                        actions: vec![],
+                    },
+                    linear::Increment {
+                        operation: Opcode { path: p(&[0, 1]) },
                         expected: Some(Operator::Bor as _),
                         actions: vec![
-                            linear::Action::BindLhs {
+                            BindLhs {
                                 id: linear::LhsId(1),
                                 path: p(&[0, 1, 1]),
                             },
-                            linear::Action::GetLhsBinding {
+                            GetLhsBinding {
                                 id: linear::LhsId(1),
                             },
-                            linear::Action::MakeBinaryInst {
+                            MakeBinaryInst {
                                 operator: Operator::Bor,
                                 r#type: Type {
                                     kind: Kind::Int,
@@ -987,11 +984,16 @@ mod tests {
                         ],
                     },
                     linear::Increment {
-                        operation: linear::MatchOp::Eq {
-                            id: linear::LhsId(0),
-                            path: p(&[0, 1, 0]),
+                        operation: Eq {
+                            path_a: p(&[0, 1, 0]),
+                            path_b: p(&[0, 0]),
                         },
                         expected: Some(1),
+                        actions: vec![],
+                    },
+                    linear::Increment {
+                        operation: Nop,
+                        expected: None,
                         actions: vec![],
                     },
                 ],
@@ -1006,9 +1008,9 @@ mod tests {
         |p: &mut dyn FnMut(&[u8]) -> PathId, i: &mut dyn FnMut(u64) -> IntegerId| {
             linear::Optimization {
                 increments: vec![linear::Increment {
-                    operation: linear::MatchOp::IntegerValue { path: p(&[0]) },
+                    operation: IntegerValue { path: p(&[0]) },
                     expected: Some(i(std::u64::MAX).into()),
-                    actions: vec![linear::Action::MakeIntegerConst {
+                    actions: vec![MakeIntegerConst {
                         value: i(0),
                         bit_width: BitWidth::Polymorphic,
                     }],
@@ -1024,28 +1026,31 @@ mod tests {
             linear::Optimization {
                 increments: vec![
                     linear::Increment {
-                        operation: linear::MatchOp::Opcode { path: p(&[0]) },
+                        operation: Opcode { path: p(&[0]) },
                         expected: Some(Operator::Ireduce as _),
                         actions: vec![
-                            linear::Action::BindLhs {
+                            BindLhs {
                                 id: linear::LhsId(0),
                                 path: p(&[0, 0]),
                             },
-                            linear::Action::MakeIntegerConst {
+                            MakeIntegerConst {
                                 value: i(0),
                                 bit_width: BitWidth::ThirtyTwo,
                             },
-                            linear::Action::BindLhs {
+                            BindLhs {
                                 id: linear::LhsId(1),
                                 path: p(&[0]),
                             },
                         ],
                     },
                     linear::Increment {
-                        operation: linear::MatchOp::BitWidth {
-                            id: linear::LhsId(1),
-                        },
+                        operation: linear::MatchOp::BitWidth { path: p(&[0]) },
                         expected: Some(32),
+                        actions: vec![],
+                    },
+                    linear::Increment {
+                        operation: Nop,
+                        expected: None,
                         actions: vec![],
                     },
                 ],

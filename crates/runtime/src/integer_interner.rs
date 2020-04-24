@@ -11,7 +11,7 @@ use std::convert::TryInto;
 
 /// An identifier for an interned integer.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct IntegerId(pub(crate) u32);
+pub struct IntegerId(#[doc(hidden)] pub u32);
 
 /// An interner for integer values.
 #[derive(Debug, Default, Serialize, Deserialize)]

@@ -6,8 +6,10 @@ use crate::operator::UnquoteOperator;
 use crate::optimizations::PeepholeOptimizations;
 use crate::part::{Constant, Part};
 use crate::r#type::{BitWidth, Type};
+use peepmatic_automata::State;
 use std::convert::TryFrom;
 use std::fmt::{self, Debug};
+use std::mem;
 
 /// A peephole optimizer instance that can apply a set of peephole
 /// optimizations to instructions.
@@ -26,6 +28,8 @@ where
     pub(crate) instr_set: I,
     pub(crate) left_hand_sides: Vec<Part<I::Instruction>>,
     pub(crate) right_hand_sides: Vec<Part<I::Instruction>>,
+    pub(crate) actions: Vec<Action>,
+    pub(crate) backtracking_states: Vec<(State, usize)>,
 }
 
 impl<'peep, 'ctx, I> Debug for PeepholeOptimizer<'peep, 'ctx, I>
@@ -38,11 +42,16 @@ where
             instr_set: _,
             left_hand_sides,
             right_hand_sides,
+            actions,
+            backtracking_states,
         } = self;
         f.debug_struct("PeepholeOptimizer")
             .field("peep_opt", peep_opt)
+            .field("instr_set", &"_")
             .field("left_hand_sides", left_hand_sides)
             .field("right_hand_sides", right_hand_sides)
+            .field("actions", actions)
+            .field("backtracking_states", backtracking_states)
             .finish()
     }
 }
@@ -98,12 +107,14 @@ where
         }
     }
 
-    fn eval_actions(&mut self, context: &mut I::Context, root: I::Instruction, actions: &[Action]) {
-        for action in actions {
+    fn eval_actions(&mut self, context: &mut I::Context, root: I::Instruction) {
+        let mut actions = mem::replace(&mut self.actions, vec![]);
+
+        for action in actions.drain(..) {
             log::trace!("Evaluating action: {:?}", action);
             match action {
                 Action::BindLhs { id, path } => {
-                    let path = self.peep_opt.paths.lookup(*path);
+                    let path = self.peep_opt.paths.lookup(path);
                     let lhs = self
                         .instr_set
                         .get_part_at_path(context, root, path)
@@ -131,12 +142,11 @@ where
                             panic!("cannot use a condition code as an unquote operand")
                         }
                     };
-                    let result = self.eval_unquote_1(*operator, operand);
+                    let result = self.eval_unquote_1(operator, operand);
                     self.right_hand_sides.push(result.into());
                 }
                 Action::BinaryUnquote { operator, operands } => {
                     let a = self.right_hand_sides[operands[0].0 as usize];
-                    dbg!(a);
                     let a = match a {
                         Part::Instruction(i) => self
                             .instr_set
@@ -149,7 +159,6 @@ where
                     };
 
                     let b = self.right_hand_sides[operands[1].0 as usize];
-                    dbg!(b);
                     let b = match b {
                         Part::Instruction(i) => self
                             .instr_set
@@ -161,14 +170,14 @@ where
                         }
                     };
 
-                    let result = self.eval_unquote_2(*operator, a, b);
+                    let result = self.eval_unquote_2(operator, a, b);
                     self.right_hand_sides.push(result.into());
                 }
                 Action::MakeIntegerConst {
                     value,
                     mut bit_width,
                 } => {
-                    let value = self.peep_opt.integers.lookup(*value);
+                    let value = self.peep_opt.integers.lookup(value);
                     if bit_width.is_polymorphic() {
                         bit_width = BitWidth::try_from(
                             self.instr_set.instruction_result_bit_width(context, root),
@@ -189,10 +198,10 @@ where
                         .unwrap();
                     }
                     self.right_hand_sides
-                        .push(Constant::Bool(*value, bit_width).into());
+                        .push(Constant::Bool(value, bit_width).into());
                 }
                 Action::MakeConditionCode { cc } => {
-                    self.right_hand_sides.push(Part::ConditionCode(*cc));
+                    self.right_hand_sides.push(Part::ConditionCode(cc));
                 }
                 Action::MakeUnaryInst {
                     operator,
@@ -209,14 +218,11 @@ where
                         )
                         .unwrap();
                     }
-                    let ty = Type {
-                        kind: *kind,
-                        bit_width,
-                    };
+                    let ty = Type { kind, bit_width };
                     let operand = self.right_hand_sides[operand.0 as usize];
                     let inst = self
                         .instr_set
-                        .make_inst_1(context, root, *operator, ty, operand);
+                        .make_inst_1(context, root, operator, ty, operand);
                     self.right_hand_sides.push(Part::Instruction(inst));
                 }
                 Action::MakeBinaryInst {
@@ -234,15 +240,12 @@ where
                         )
                         .unwrap();
                     }
-                    let ty = Type {
-                        kind: *kind,
-                        bit_width,
-                    };
+                    let ty = Type { kind, bit_width };
                     let a = self.right_hand_sides[operands[0].0 as usize];
                     let b = self.right_hand_sides[operands[1].0 as usize];
                     let inst = self
                         .instr_set
-                        .make_inst_2(context, root, *operator, ty, a, b);
+                        .make_inst_2(context, root, operator, ty, a, b);
                     self.right_hand_sides.push(Part::Instruction(inst));
                 }
                 Action::MakeTernaryInst {
@@ -260,31 +263,20 @@ where
                         )
                         .unwrap();
                     }
-                    let ty = Type {
-                        kind: *kind,
-                        bit_width,
-                    };
+                    let ty = Type { kind, bit_width };
                     let a = self.right_hand_sides[operands[0].0 as usize];
                     let b = self.right_hand_sides[operands[1].0 as usize];
                     let c = self.right_hand_sides[operands[1].0 as usize];
                     let inst = self
                         .instr_set
-                        .make_inst_3(context, root, *operator, ty, a, b, c);
+                        .make_inst_3(context, root, operator, ty, a, b, c);
                     self.right_hand_sides.push(Part::Instruction(inst));
                 }
             }
         }
-    }
 
-    fn next(
-        &self,
-        query: &mut peepmatic_automata::Query<'peep, Option<u32>, MatchOp, Vec<Action>>,
-        input: Option<u32>,
-    ) -> Option<&'peep Vec<Action>> {
-        query.next(&input).or_else(|| {
-            log::trace!("No transition for match op result, trying fallback transition");
-            query.next(&None)
-        })
+        // Reuse the heap elements allocation.
+        self.actions = actions;
     }
 
     fn eval_match_op(
@@ -315,9 +307,10 @@ where
                 };
                 Some(is_const as u32)
             }
-            IsPowerOfTwo { id } => {
-                let lhs = self.left_hand_sides[id.0 as usize];
-                match lhs {
+            IsPowerOfTwo { path } => {
+                let path = self.peep_opt.paths.lookup(path);
+                let part = self.instr_set.get_part_at_path(context, root, path)?;
+                match part {
                     Part::Constant(c) => Some(c.as_int().unwrap().is_power_of_two() as u32),
                     Part::Instruction(i) => {
                         let c = self.instr_set.instruction_to_constant(context, i)?;
@@ -326,9 +319,10 @@ where
                     Part::ConditionCode(_) => panic!("IsPowerOfTwo on a condition code"),
                 }
             }
-            BitWidth { id } => {
-                let lhs = self.left_hand_sides[id.0 as usize];
-                let bit_width = match lhs {
+            BitWidth { path } => {
+                let path = self.peep_opt.paths.lookup(path);
+                let part = self.instr_set.get_part_at_path(context, root, path)?;
+                let bit_width = match part {
                     Part::Instruction(i) => self.instr_set.instruction_result_bit_width(context, i),
                     Part::Constant(_) | Part::ConditionCode(_) => {
                         panic!("BitWidth on non-instruction")
@@ -336,12 +330,13 @@ where
                 };
                 Some(bit_width as u32)
             }
-            FitsInNativeWord { id } => {
+            FitsInNativeWord { path } => {
                 let native_word_size = self.instr_set.native_word_size_in_bits(context);
                 debug_assert!(native_word_size.is_power_of_two());
 
-                let lhs = self.left_hand_sides[id.0 as usize];
-                let fits = match lhs {
+                let path = self.peep_opt.paths.lookup(path);
+                let part = self.instr_set.get_part_at_path(context, root, path)?;
+                let fits = match part {
                     Part::Instruction(i) => {
                         let size = self.instr_set.instruction_result_bit_width(context, i);
                         size <= native_word_size
@@ -355,11 +350,12 @@ where
                 };
                 Some(fits as u32)
             }
-            Eq { id, path } => {
-                let path = self.peep_opt.paths.lookup(path);
-                let part = self.instr_set.get_part_at_path(context, root, path)?;
-                let lhs = self.left_hand_sides[id.0 as usize];
-                let eq = part == lhs;
+            Eq { path_a, path_b } => {
+                let path_a = self.peep_opt.paths.lookup(path_a);
+                let part_a = self.instr_set.get_part_at_path(context, root, path_a)?;
+                let path_b = self.peep_opt.paths.lookup(path_b);
+                let part_b = self.instr_set.get_part_at_path(context, root, path_b)?;
+                let eq = part_a == part_b;
                 Some(eq as u32)
             }
             IntegerValue { path } => {
@@ -415,6 +411,8 @@ where
         context: &mut I::Context,
         root: I::Instruction,
     ) -> Option<I::Instruction> {
+        self.backtracking_states.clear();
+        self.actions.clear();
         self.left_hand_sides.clear();
         self.right_hand_sides.clear();
 
@@ -422,6 +420,8 @@ where
 
         let mut query = self.peep_opt.automata.query();
         loop {
+            log::trace!("Current state: {:?}", query.current_state());
+
             if query.is_in_final_state() {
                 // If we're in a final state (which means an optimization is
                 // applicable) then record that fact, but keep going. We don't
@@ -429,11 +429,18 @@ where
                 // more-specific optimization that is also applicable if we keep
                 // going. And we always want to apply the most specific
                 // optimization that matches.
-                r#final = Some((
-                    query.current_state(),
-                    self.left_hand_sides.len(),
-                    self.right_hand_sides.len(),
-                ));
+                log::trace!("Found a match at state {:?}", query.current_state());
+                r#final = Some((query.current_state(), self.actions.len()));
+            }
+
+            // Anything following a `None` transition doesn't care about the
+            // result of this match operation, so if we partially follow the
+            // current non-`None` path, but don't ultimately find a matching
+            // optimization, we want to be able to backtrack to this state and
+            // then try taking the `None` transition.
+            if query.has_transition_on(&None) {
+                self.backtracking_states
+                    .push((query.current_state(), self.actions.len()));
             }
 
             let match_op = match query.current_state_data() {
@@ -443,24 +450,35 @@ where
 
             let input = self.eval_match_op(context, root, *match_op);
 
-            match self.next(&mut query, input) {
-                None => break,
-                Some(actions) => self.eval_actions(context, root, actions),
-            }
+            let actions = if let Some(actions) = query.next(&input) {
+                actions
+            } else if r#final.is_some() {
+                break;
+            } else if let Some((state, actions_len)) = self.backtracking_states.pop() {
+                query.go_to_state(state);
+                self.actions.truncate(actions_len);
+                query
+                    .next(&None)
+                    .expect("backtracking states always have `None` transitions")
+            } else {
+                break;
+            };
+
+            self.actions.extend(actions.iter().copied());
         }
 
         // If `final` is none, then we didn't encounter any final states, so
         // there are no applicable optimizations.
-        let (final_state, lhs_len, rhs_len) = r#final?;
+        let (final_state, actions_len) = r#final?;
 
         // Go to the last final state we saw, reset the LHS and RHS to how
         // they were at the time we saw the final state, and process the
         // final actions.
-        self.left_hand_sides.truncate(lhs_len);
-        self.right_hand_sides.truncate(rhs_len);
+        self.actions.truncate(actions_len);
         query.go_to_state(final_state);
-        let actions = query.finish().expect("should be in a final state");
-        self.eval_actions(context, root, actions);
+        let final_actions = query.finish().expect("should be in a final state");
+        self.actions.extend(final_actions.iter().copied());
+        self.eval_actions(context, root);
 
         // And finally, the root of the RHS for this optimization is the
         // last entry in `self.right_hand_sides`, so replace the old root

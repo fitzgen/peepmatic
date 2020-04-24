@@ -109,8 +109,8 @@ pub fn compile_str(source: &str, filename: &Path) -> anyhow::Result<PeepholeOpti
 
     let mut opts = crate::linearize(&opts);
     sort_least_to_most_general(&mut opts);
+    remove_unnecessary_nops(&mut opts);
     match_in_same_order(&mut opts);
-    insert_fallback_optimizations(&mut opts);
     sort_lexicographically(&mut opts);
 
     let automata = automatize(&opts);

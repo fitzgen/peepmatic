@@ -13,8 +13,9 @@ use std::panic;
 use std::time;
 
 pub mod automata;
-pub mod parser;
 pub mod compile;
+pub mod interp;
+pub mod parser;
 
 /// A quickcheck-style runner for fuzz targets.
 ///

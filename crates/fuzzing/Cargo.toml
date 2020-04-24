@@ -15,7 +15,8 @@ fst = "0.4.1"
 log = "0.4.8"
 peepmatic = { path = "../.." }
 peepmatic-automata = { path = "../automata", features = ["serde"] }
-peepmatic-runtime = { path = "../runtime" }
+peepmatic-runtime = { path = "../runtime", features = ["construct"] }
+peepmatic-test = { path = "../test" }
 rand = { version = "0.7.3", features = ["small_rng"] }
 serde = "1.0.106"
 wast = "13.0.0"

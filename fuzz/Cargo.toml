@@ -37,3 +37,9 @@ name = "compile"
 path = "fuzz_targets/compile.rs"
 test = false
 doc = false
+
+[[bin]]
+name = "interp"
+path = "fuzz_targets/interp.rs"
+test = false
+doc = false

@@ -215,7 +215,9 @@ pub(crate) struct TypingContext<'a> {
     // constraint is not satisfied.
     constraints: Vec<(z3::ast::Bool<'a>, Span, Option<Cow<'static, str>>)>,
 
-    // TODO FITZGEN
+    // Keep track of AST nodes that need to have their types assigned to
+    // them. For these AST nodes, we know what bit width to use when
+    // interpreting peephole optimization actions.
     boolean_literals: Vec<(&'a Boolean<'a>, TypeVar<'a>)>,
     integer_literals: Vec<(&'a Integer<'a>, TypeVar<'a>)>,
     rhs_operations: Vec<(&'a Operation<'a, Rhs<'a>>, TypeVar<'a>)>,
@@ -242,6 +244,26 @@ impl<'a> TypingContext<'a> {
             integer_literals: Default::default(),
             rhs_operations: Default::default(),
         }
+    }
+
+    fn init_root_type(&mut self, span: Span, root_ty: TypeVar<'a>) {
+        assert!(self.root_ty.is_none());
+
+        // Make sure the root is a valid kind, i.e. not a condition code.
+        let is_int = self.is_int(&root_ty);
+        let is_bool = self.is_bool(&root_ty);
+        let is_void = self.is_void(&root_ty);
+        let is_cpu_flags = self.is_cpu_flags(&root_ty);
+        self.constraints.push((
+            is_int.or(&[&is_bool, &is_void, &is_cpu_flags]),
+            span,
+            Some(
+                "the root of an optimization must be an integer, a boolean, void, or CPU flags"
+                    .into(),
+            ),
+        ));
+
+        self.root_ty = Some(root_ty);
     }
 
     fn new_type_var(&self) -> TypeVar<'a> {
@@ -725,7 +747,8 @@ fn collect_type_constraints<'a>(
     use crate::traversals::TraversalEvent as TE;
 
     let lhs_ty = context.new_type_var();
-    context.root_ty = Some(lhs_ty.clone());
+    context.init_root_type(opt.lhs.span, lhs_ty.clone());
+
     let rhs_ty = context.new_type_var();
     context.assert_type_eq(
         opt.span,
@@ -754,6 +777,13 @@ fn collect_type_constraints<'a>(
             (TE::Enter, DynAstRef::Pattern(Pattern::ValueLiteral(ValueLiteral::Boolean(b)))) => {
                 let ty = expected_types.last().unwrap();
                 context.remember_boolean_literal(b, ty.clone());
+            }
+            (
+                TE::Enter,
+                DynAstRef::Pattern(Pattern::ValueLiteral(ValueLiteral::ConditionCode(cc))),
+            ) => {
+                let ty = expected_types.last().unwrap();
+                context.assert_is_cc(cc.span, ty);
             }
             (TE::Enter, DynAstRef::PatternOperation(op)) => {
                 let result_ty;
@@ -866,6 +896,10 @@ fn collect_type_constraints<'a>(
             (TE::Enter, DynAstRef::Rhs(Rhs::ValueLiteral(ValueLiteral::Boolean(b)))) => {
                 let ty = expected_types.last().unwrap();
                 context.remember_boolean_literal(b, ty.clone());
+            }
+            (TE::Enter, DynAstRef::Rhs(Rhs::ValueLiteral(ValueLiteral::ConditionCode(cc)))) => {
+                let ty = expected_types.last().unwrap();
+                context.assert_is_cc(cc.span, ty);
             }
             (TE::Enter, DynAstRef::Rhs(Rhs::Constant(Constant { span, id })))
             | (TE::Enter, DynAstRef::Rhs(Rhs::Variable(Variable { span, id }))) => {
@@ -1120,8 +1154,11 @@ fn type_constrain_precondition<'a>(
                     )
                     .into())
                 }
-                ConstraintOperand::Constant(Constant { .. })
-                | ConstraintOperand::Variable(Variable { .. }) => Ok(()),
+                ConstraintOperand::Constant(Constant { id, .. })
+                | ConstraintOperand::Variable(Variable { id, .. }) => {
+                    context.get_type_var_for_id(id)?;
+                    Ok(())
+                }
             }
         }
     }
@@ -1372,5 +1409,10 @@ mod tests {
     verify_err!(
         using_an_operation_as_an_immediate_in_rhs,
         "(=> (iadd (imul $x $y) $z) (iadd_imm (imul $x $y) $z))"
+    );
+
+    verify_err!(
+        using_a_condition_code_as_the_root_of_an_optimization,
+        "(=> eq eq)"
     );
 }

@@ -146,6 +146,10 @@ impl Type {
         b64(Bool, SixtyFour);
         /// Get the `b128` type.
         b128(Bool, OneTwentyEight);
+        /// Get the CPU flags type.
+        cpu_flags(CpuFlags, One);
+        /// Get the void type.
+        void(Void, One);
     }
 }
 

@@ -5,7 +5,7 @@
 use peepmatic_automata::dot::DotFmt;
 use peepmatic_runtime::{
     cc::ConditionCode,
-    integer_interner::IntegerInterner,
+    integer_interner::{IntegerId, IntegerInterner},
     linear,
     operator::Operator,
     paths::{PathId, PathInterner},
@@ -37,6 +37,10 @@ impl DotFmt<Option<u32>, linear::MatchOp, Vec<linear::Action>> for PeepholeDotFm
                         ConditionCode::try_from(*x).expect("we shouldn't generate non-CC edges");
                     write!(w, "{}", cc)
                 }
+                linear::MatchOp::IntegerValue { .. } => {
+                    let x = self.1.lookup(IntegerId(*x));
+                    write!(w, "{}", x)
+                }
                 _ => write!(w, "{}", x),
             }
         } else {
@@ -53,10 +57,10 @@ impl DotFmt<Option<u32>, linear::MatchOp, Vec<linear::Action>> for PeepholeDotFm
         match op {
             Opcode { path } => write!(w, "opcode @ {}", p(path))?,
             IsConst { path } => write!(w, "is-const? @ {}", p(path))?,
-            IsPowerOfTwo { id } => write!(w, "is-power-of-two? $lhs{}", id.0)?,
-            BitWidth { id } => write!(w, "bit-width $lhs{}", id.0)?,
-            FitsInNativeWord { id } => write!(w, "fits-in-native-word $lhs{}", id.0)?,
-            Eq { id, path } => write!(w, "eq? $lhs{} @ {}", id.0, p(path))?,
+            IsPowerOfTwo { path } => write!(w, "is-power-of-two? @ {}", p(path))?,
+            BitWidth { path } => write!(w, "bit-width @ {}", p(path))?,
+            FitsInNativeWord { path } => write!(w, "fits-in-native-word @ {}", p(path))?,
+            Eq { path_a, path_b } => write!(w, "{} == {}", p(path_a), p(path_b))?,
             IntegerValue { path } => write!(w, "integer-value @ {}", p(path))?,
             BooleanValue { path } => write!(w, "boolean-value @ {}", p(path))?,
             ConditionCode { path } => write!(w, "condition-code @ {}", p(path))?,
@@ -70,7 +74,7 @@ impl DotFmt<Option<u32>, linear::MatchOp, Vec<linear::Action>> for PeepholeDotFm
         use linear::Action::*;
 
         if actions.is_empty() {
-            return writeln!(w, "(none)");
+            return writeln!(w, "(no output)");
         }
 
         write!(w, r#"<font face="monospace">"#)?;

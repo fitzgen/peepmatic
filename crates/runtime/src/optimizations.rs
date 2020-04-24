@@ -67,6 +67,8 @@ impl PeepholeOptimizations {
             instr_set,
             left_hand_sides: vec![],
             right_hand_sides: vec![],
+            actions: vec![],
+            backtracking_states: vec![],
         }
     }
 }

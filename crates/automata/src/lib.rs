@@ -961,6 +961,15 @@ where
         self.current_state = state;
     }
 
+    /// Does the query's current state have a transition on the given input?
+    ///
+    /// Regardless whether a transition on the given input exists for the
+    /// current state or not, the query remains in the current state.
+    pub fn has_transition_on(&self, input: &TAlphabet) -> bool {
+        let State(i) = self.current_state;
+        self.automata.transitions[i as usize].contains_key(input)
+    }
+
     /// Transition to the next state given the next input character, and return
     /// the partial output for that transition.
     ///

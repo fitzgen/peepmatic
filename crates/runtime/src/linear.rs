@@ -65,36 +65,38 @@ pub enum MatchOp {
 
     /// Does an instruction have a constant value?
     IsConst {
-        /// The path to the instruction we're checking whether it is constant or
-        /// not.
+        /// The path to the instruction (or immediate) that we're checking
+        /// whether it is constant or not.
         path: PathId,
     },
 
     /// Is the constant value a power of two?
     IsPowerOfTwo {
-        /// The id of the constant value that was bound in the left-hand side.
-        id: LhsId,
+        /// The path to the instruction (or immediate) that we are checking
+        /// whether it is a constant power of two or not.
+        path: PathId,
     },
 
     /// Switch on the bit width of a value.
     BitWidth {
-        /// The id of the value that was bound in the left-hand side.
-        id: LhsId,
+        /// The path to the instruction (or immediate) whose result's bit width
+        /// we are checking.
+        path: PathId,
     },
 
     /// Does the value fit in our target architecture's native word size?
     FitsInNativeWord {
-        /// The id of the value we're checking whether fits or not.
-        id: LhsId,
+        /// The path to the instruction (or immediate) whose result we are
+        /// checking whether it fits in a native word or not.
+        path: PathId,
     },
 
-    /// Is the instruction at the given path the same SSA value as the value
-    /// bound on the left-hand side?
+    /// Are the instructions (or immediates) at the given paths the same?
     Eq {
-        /// The id of the value that was bound in the left-hand side.
-        id: LhsId,
-        /// The path to the instruction we're checking.
-        path: PathId,
+        /// The path to the first instruction (or immediate).
+        path_a: PathId,
+        /// The path to the second instruction (or immediate).
+        path_b: PathId,
     },
 
     /// Switch on the constant integer value of an instruction.
@@ -133,7 +135,7 @@ pub struct LhsId(pub u32);
 pub struct RhsId(pub u32);
 
 /// An action to perform when transitioning between states in the automata.
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Action {
     /// Bind `id = path` in the left-hand side scope.
     BindLhs {

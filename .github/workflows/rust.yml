@@ -58,3 +58,14 @@ jobs:
       run: cargo fuzz build compile -Oa --sanitizer=none
     - name: Run compile fuzz target
       run: cargo fuzz run compile -Oa --sanitizer=none -- -max_total_time=300
+
+  fuzz_interp:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: Install cargo fuzz
+      run: cargo install cargo-fuzz
+    - name: Build fuzz target
+      run: cargo fuzz build interp -Oa --sanitizer=none
+    - name: Run interp fuzz target
+      run: cargo fuzz run interp -Oa --sanitizer=none -- -max_total_time=300
