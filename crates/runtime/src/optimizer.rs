@@ -349,8 +349,17 @@ where
                 let part_a = self.instr_set.get_part_at_path(context, root, path_a)?;
                 let path_b = self.peep_opt.paths.lookup(path_b);
                 let part_b = self.instr_set.get_part_at_path(context, root, path_b)?;
-                let eq = part_a == part_b;
-                Some(eq as u32)
+                let eq = match (part_a, part_b) {
+                    (Part::Instruction(inst), Part::Constant(c1))
+                    | (Part::Constant(c1), Part::Instruction(inst)) => {
+                        match self.instr_set.instruction_to_constant(context, inst) {
+                            Some(c2) => c1 == c2,
+                            None => false,
+                        }
+                    }
+                    (a, b) => a == b,
+                };
+                Some(eq as _)
             }
             IntegerValue { path } => {
                 let path = self.peep_opt.paths.lookup(path);

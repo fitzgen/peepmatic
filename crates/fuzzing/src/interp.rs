@@ -356,4 +356,9 @@ mod tests {
             ",
         );
     }
+
+    #[test]
+    fn regression_12() {
+        interp(b"(=> (band $C1 (band_imm $C1 1)) 1)");
+    }
 }
