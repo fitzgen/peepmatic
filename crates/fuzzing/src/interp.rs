@@ -345,4 +345,15 @@ mod tests {
     fn regression_10() {
         interp(b"(=> (sshr{i1} $x 0) $x)");
     }
+
+    #[test]
+    fn regression_11() {
+        interp(
+            b"
+            (=> (when (ushr_imm $x (ishl 4 3))
+                      (bit-width $x 64))
+                (sextend{i64} (ireduce{i32} $x)))
+            ",
+        );
+    }
 }

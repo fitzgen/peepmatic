@@ -315,9 +315,12 @@ where
                 let part = self.instr_set.get_part_at_path(context, root, path)?;
                 let bit_width = match part {
                     Part::Instruction(i) => self.instr_set.instruction_result_bit_width(context, i),
-                    Part::Constant(_) | Part::ConditionCode(_) => {
-                        panic!("BitWidth on non-instruction")
+                    Part::Constant(Constant::Int(_, w)) | Part::Constant(Constant::Bool(_, w)) => {
+                        w.fixed_width().unwrap_or_else(|| {
+                            self.instr_set.instruction_result_bit_width(context, root)
+                        })
                     }
+                    Part::ConditionCode(_) => panic!("BitWidth on condition code"),
                 };
                 Some(bit_width as u32)
             }
@@ -402,6 +405,8 @@ where
         context: &mut I::Context,
         root: I::Instruction,
     ) -> Option<I::Instruction> {
+        log::trace!("PeepholeOptimizer::apply_one");
+
         self.backtracking_states.clear();
         self.actions.clear();
         self.left_hand_sides.clear();
