@@ -8,9 +8,8 @@ pub type Result<T> = std::result::Result<T, Error>;
 
 /// Errors that `peepmatic_runtime` may generate.
 #[derive(Debug, Error)]
-#[error("{inner}")]
+#[error(transparent)]
 pub struct Error {
-    #[error(transparent)]
     #[from]
     inner: Box<ErrorInner>,
 }
