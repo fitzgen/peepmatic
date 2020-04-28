@@ -6,7 +6,7 @@ use peepmatic::{
 };
 use peepmatic_runtime::{
     cc::ConditionCode,
-    operator::{Operator, TypingContext as TypingContextTrait},
+    operator::TypingContext as TypingContextTrait,
     part::Constant,
     r#type::BitWidth,
     r#type::{Kind, Type},
@@ -48,10 +48,10 @@ pub fn interp(data: &[u8]) {
     for opt in &ast.optimizations {
         // The instruction sequence we generate must match an optimization (not
         // necessarily *this* optimization, if there is another that is more
-        // specific but also matches) unless there is a `bit-width` precondition
-        // or there are `ireduce`, `sextend`, or `uextend` operations. When
-        // those things exist, we might have constructed instructions with the
-        // wrong bit widths to match.
+        // specific but also matches) unless there is an `bit-width`
+        // precondition or an implicit `bit-width` precondition via a type
+        // ascription. When those things exist, we might have constructed
+        // instructions with the wrong bit widths to match.
         let mut allow_no_match = false;
 
         // The last instruction we generated. After we've generated the full
@@ -80,9 +80,7 @@ pub fn interp(data: &[u8]) {
                 }
 
                 DynAstRef::Pattern(Pattern::Operation(op)) => {
-                    allow_no_match |= op.operator == Operator::Sextend
-                        || op.operator == Operator::Uextend
-                        || op.operator == Operator::Ireduce;
+                    allow_no_match |= op.r#type.get().is_some();
 
                     let num_imms = op.operator.immediates_arity() as usize;
 
@@ -341,5 +339,10 @@ mod tests {
             (=> (trapnz $x) (trapnz $x))
             ",
         );
+    }
+
+    #[test]
+    fn regression_10() {
+        interp(b"(=> (sshr{i1} $x 0) $x)");
     }
 }
