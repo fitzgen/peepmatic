@@ -526,27 +526,31 @@ impl<'a> TypingContext<'a> {
         }
     }
 
-    fn assign_types(&mut self) {
+    fn assign_types(&mut self) -> VerifyResult<()> {
         for (int, ty) in mem::replace(&mut self.integer_literals, vec![]) {
-            let width = self.ty_var_to_width(&ty);
+            let width = self.ty_var_to_width(&ty)?;
             int.bit_width.set(Some(width));
         }
+
         for (b, ty) in mem::replace(&mut self.boolean_literals, vec![]) {
-            let width = self.ty_var_to_width(&ty);
+            let width = self.ty_var_to_width(&ty)?;
             b.bit_width.set(Some(width));
         }
+
         for (op, ty) in mem::replace(&mut self.rhs_operations, vec![]) {
             let kind = self.op_ty_var_to_kind(&ty);
             let bit_width = match kind {
                 Kind::CpuFlags | Kind::Void => BitWidth::One,
-                Kind::Int | Kind::Bool => self.ty_var_to_width(&ty),
+                Kind::Int | Kind::Bool => self.ty_var_to_width(&ty)?,
             };
             debug_assert!(op.r#type.get().is_none());
             op.r#type.set(Some(Type { kind, bit_width }));
         }
+
+        Ok(())
     }
 
-    fn ty_var_to_width(&self, ty_var: &TypeVar<'a>) -> BitWidth {
+    fn ty_var_to_width(&self, ty_var: &TypeVar<'a>) -> VerifyResult<BitWidth> {
         // Doing solver push/pops apparently clears out the model, so we have to
         // re-check each time to ensure that it exists, and Z3 doesn't helpfully
         // abort the process for us. This should be fast, since the solver
@@ -573,22 +577,33 @@ impl<'a> TypingContext<'a> {
             // If something is polymorphic over bit widths, it must be
             // polymorphic over the same bit width as the whole
             // optimization.
+            //
+            // TODO: We should have a better model for bit-width
+            // polymorphism. The current setup works for all the use cases we
+            // currently care about, and is relatively easy to implement when
+            // matching and constructing the RHS, but is a bit ad-hoc. Maybe
+            // allow each LHS variable a polymorphic bit width, augment the AST
+            // with that info, and later emit match ops as necessary to express
+            // their relative constraints? *hand waves*
             self.solver.push();
             self.solver
                 .assert(&ty_var.width._eq(&self.root_ty.as_ref().unwrap().width));
             match self.solver.check() {
                 z3::SatResult::Sat => {}
-                z3::SatResult::Unsat => panic!(
-                    "constant is bit width polymorphic, but not over the optimization's root \
-                     width"
-                ),
+                z3::SatResult::Unsat => {
+                    return Err(anyhow::anyhow!(
+                        "AST node is bit width polymorphic, but not over the optimization's root \
+                         width"
+                    )
+                    .into())
+                }
                 z3::SatResult::Unknown => panic!("Z3 cannot determine bit width of type"),
             };
             self.solver.pop(1);
 
-            BitWidth::Polymorphic
+            Ok(BitWidth::Polymorphic)
         } else {
-            BitWidth::try_from(bit_width).unwrap()
+            Ok(BitWidth::try_from(bit_width).unwrap())
         }
     }
 
@@ -732,7 +747,7 @@ fn verify_optimization(z3: &z3::Context, opt: &Optimization) -> VerifyResult<()>
     let mut context = TypingContext::new(z3);
     collect_type_constraints(&mut context, opt)?;
     context.type_check(opt.span)?;
-    context.assign_types();
+    context.assign_types()?;
 
     // TODO: add another pass here to check for counter-examples to this
     // optimization, i.e. inputs where the LHS and RHS are not equivalent.

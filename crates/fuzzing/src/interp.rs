@@ -361,4 +361,9 @@ mod tests {
     fn regression_12() {
         interp(b"(=> (band $C1 (band_imm $C1 1)) 1)");
     }
+
+    #[test]
+    fn regression_13() {
+        interp(b"(=> (brz (icmp eq 0 $x)) (brz (ireduce{i32} $x)))");
+    }
 }
