@@ -257,7 +257,7 @@ where
                     let ty = Type { kind, bit_width };
                     let a = self.right_hand_sides[operands[0].0 as usize];
                     let b = self.right_hand_sides[operands[1].0 as usize];
-                    let c = self.right_hand_sides[operands[1].0 as usize];
+                    let c = self.right_hand_sides[operands[2].0 as usize];
                     let inst = self
                         .instr_set
                         .make_inst_3(context, root, operator, ty, a, b, c);
