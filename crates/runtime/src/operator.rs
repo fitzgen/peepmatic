@@ -87,11 +87,11 @@ pub enum Operator {
     Iconst,
 
     /// `ifcmp`
-    #[peepmatic(immediates(cc), params(iNN, iNN), result(cpu_flags))]
+    #[peepmatic(params(iNN, iNN), result(cpu_flags))]
     Ifcmp,
 
     /// `ifcmp_imm`
-    #[peepmatic(immediates(cc, iNN), params(iNN), result(cpu_flags))]
+    #[peepmatic(immediates(iNN), params(iNN), result(cpu_flags))]
     IfcmpImm,
 
     /// `imul`

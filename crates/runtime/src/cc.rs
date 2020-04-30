@@ -6,8 +6,8 @@ use std::fmt;
 
 /// A condition code.
 ///
-/// This is a special kind of immediate for `icmp` and `ifcmp` instructions that
-/// dictate which parts of the comparison result we care about.
+/// This is a special kind of immediate for `icmp` instructions that dictate
+/// which parts of the comparison result we care about.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[repr(u32)]
 pub enum ConditionCode {

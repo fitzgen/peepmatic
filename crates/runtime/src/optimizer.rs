@@ -474,7 +474,13 @@ where
 
         // If `final` is none, then we didn't encounter any final states, so
         // there are no applicable optimizations.
-        let (final_state, actions_len) = r#final?;
+        let (final_state, actions_len) = match r#final {
+            Some(f) => f,
+            None => {
+                log::trace!("No optimizations matched");
+                return None;
+            }
+        };
 
         // Go to the last final state we saw, reset the LHS and RHS to how
         // they were at the time we saw the final state, and process the
