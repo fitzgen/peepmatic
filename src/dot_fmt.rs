@@ -95,11 +95,11 @@ impl DotFmt<Option<u32>, linear::MatchOp, Vec<linear::Action>> for PeepholeDotFm
                 MakeIntegerConst {
                     value,
                     bit_width: _,
-                } => write!(w, "{}<br/>", self.1.lookup(*value))?,
+                } => write!(w, "make {}<br/>", self.1.lookup(*value))?,
                 MakeBooleanConst {
                     value,
                     bit_width: _,
-                } => write!(w, "{}<br/>", value)?,
+                } => write!(w, "make {}<br/>", value)?,
                 MakeConditionCode { cc } => write!(w, "{}<br/>", cc)?,
                 MakeUnaryInst {
                     operand,
