@@ -293,8 +293,7 @@ where
                     Part::Instruction(i) => {
                         self.instr_set.instruction_to_constant(context, i).is_some()
                     }
-                    Part::Constant(_) => true,
-                    Part::ConditionCode(_) => panic!("IsConst on a condition code"),
+                    Part::ConditionCode(_) | Part::Constant(_) => true,
                 };
                 Some(is_const as u32)
             }

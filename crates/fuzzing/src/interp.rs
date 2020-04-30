@@ -366,4 +366,9 @@ mod tests {
     fn regression_13() {
         interp(b"(=> (brz (icmp eq 0 $x)) (brz (ireduce{i32} $x)))");
     }
+
+    #[test]
+    fn regression_14() {
+        interp(b"(=> (brz (icmp $E 0 $x)) (brz $x))");
+    }
 }
