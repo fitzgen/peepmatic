@@ -138,13 +138,28 @@ pub fn compile_str(source: &str, filename: &Path) -> anyhow::Result<PeepholeOpti
 mod tests {
     use super::*;
 
+    fn assert_compiles(path: &str) {
+        match compile_file(Path::new(path)) {
+            Ok(_) => return,
+            Err(e) => {
+                eprintln!("error: {}", e);
+                panic!("error: {}", e);
+            }
+        }
+    }
+
     #[test]
     fn compile_redundant_bor() {
-        compile_file(Path::new("examples/redundant-bor.peepmatic")).unwrap();
+        assert_compiles("examples/redundant-bor.peepmatic");
+    }
+
+    #[test]
+    fn mul_by_pow2() {
+        assert_compiles("examples/mul-by-pow2.peepmatic");
     }
 
     #[test]
     fn compile_preopt() {
-        compile_file(Path::new("examples/preopt.peepmatic")).unwrap();
+        assert_compiles("examples/preopt.peepmatic");
     }
 }
