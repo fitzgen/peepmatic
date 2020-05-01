@@ -12,11 +12,7 @@ peepmatic-automata = { version = "0.1.0", path = "crates/automata", features = [
 peepmatic-macro = { version = "0.1.0", path = "crates/macro" }
 peepmatic-runtime = { version = "0.1.0", path = "crates/runtime", features = ["construct"] }
 wast = "13.0.0"
-
-# Waiting on a new release.
-[dependencies.z3]
-git = "https://github.com/prove-rs/z3.rs.git"
-features = ["static-link-z3"]
+z3 = { version = "0.5.0", features = ["static-link-z3"] }
 
 [workspace]
 members = ["fuzz", "crates/test"]
