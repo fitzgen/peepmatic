@@ -24,6 +24,11 @@
   - [Nested Patterns](#nested-patterns)
   - [Preconditions and Unquoting](#preconditions-and-unquoting)
   - [Bit Widths](#bit-widths)
+- [Implementation](#implementation)
+  - [Parsing](#parsing)
+  - [Type Checking](#type-checking)
+  - [Linearization](#linearization)
+  - [Automatization](#automatization)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
@@ -272,3 +277,115 @@ curly brackets after the operator, like this:
           (bit-width $x 64))
     (sshr (ishl $x 32) 32))
 ```
+
+## Implementation
+
+Peepmatic has roughly four phases:
+
+1. Parsing
+2. Type Checking
+3. Linearization
+4. Automatization
+
+(I say "roughly" because there are a couple micro-passes that happen after
+linearization and before automatization. But those are the four main phases.)
+
+### Parsing
+
+Parsing transforms the DSL source text into an abstract syntax tree (AST).
+
+We use [the `wast` crate][wast]. It gives us nicely formatted errors with source
+context, as well as some other generally nice-to-have parsing infrastructure.
+
+Relevant source files:
+
+* `src/parser.rs`
+* `src/ast.rs`
+
+[wast]: https://crates.io/crates/wast
+
+### Type Checking
+
+Type checking operates on the AST. It checks that types and bit widths in the
+optimizations are all valid. For example, it ensures that the type and bit width
+of an optimization's left-hand side is the same as its right-hand side, because
+it doesn't make sense to replace an integer expression with a boolean
+expression.
+
+After type checking is complete, certain AST nodes are assigned a type and bit
+width, that are later used in linearization and when matching and applying
+optimizations.
+
+We walk the AST and gather type constraints. Every constraint is associated with
+a span in the source file. We hand these constraints off to Z3. In the case that
+there are type errors (i.e. Z3 returns `unsat`), we get the constraints that are
+in conflict with each othe via `z3::Solver::get_unsat_core` and report the type
+errors to the user, with the source context, thanks to the constraints'
+associated spans.
+
+Using Z3 not only makes implementing type checking easier than it otherwise
+would be, but makes it that much easier to extend type checking with searching
+for counterexample inputs in the future. That is, inputs for which the RHS is
+not equivalent to the LHS, implying that the optimization is unsound.
+
+Relevant source files:
+
+* `src/verify.rs`
+
+### Linearization
+
+Linearization takes the AST of optimizations and converts each optimization into
+a linear form. The goal is to make automaton construction easier in the
+automatization step, as well as simplifying the language to make matching and
+applying optimizations easier.
+
+Each optimization's left-hand side is converted into a sequence of
+
+* match operation,
+* path to the instruction/value/immediate to which the operation is applied, and
+* expected result of the operation.
+
+All match operations must have the expected result for the optimization to be
+applicable to an instruction sequence.
+
+Each optimization's right-hand side is converted into a sequence of build
+actions. These are commands that describe how to construct the right-hand side,
+given that the left-hand side has been matched.
+
+Relevant source files:
+
+* `src/linearize.rs`
+* `src/linear_passes.rs`
+* `crates/runtime/src/linear.rs`
+
+### Automatization
+
+Automatization takes a set of linear optimizations and combines them into a
+transducer automaton. This automaton is the final, compiled peephole
+optimizations. The goal is to de-duplicate as much as we can from all the linear
+optimizations, producing as compact and cache-friendly a representation as we
+can.
+
+Plain automata can tell you whether it matches an input string. It can be
+thought of as a compact representation of a set of strings. A transducer is a
+type of automaton that doesn't just match input strings, but can map them to
+output values. It can be thought of as a compact representation of a dictionary
+or map. By using transducers, we de-duplicate not only the prefix and suffix of
+the match operations, but also the right-hand side build actions.
+
+Each state in the emitted transducers is associated with a match operation and
+path. The transitions out of that state are over the result of the match
+operation. Each transition optionally accumulates some RHS build actions. By the
+time we reach a final state, the RHS build actions are complete and can be
+interpreted to apply the matched optimization.
+
+The relevant source files for constructing the transducer automaton are:
+
+* `src/automatize.rs`
+* `crates/automata/src/lib.rs`
+
+The relevant source files for the runtime that interprets the transducers and
+applies optimizations are:
+
+* `crates/runtime/src/optimizations.rs`
+* `crates/runtime/src/optimizer.rs`
