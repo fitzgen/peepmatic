@@ -389,3 +389,33 @@ applies optimizations are:
 
 * `crates/runtime/src/optimizations.rs`
 * `crates/runtime/src/optimizer.rs`
+
+## References
+
+I found these resources helpful when designing `peepmatic`:
+
+* [Extending tree pattern matching for application to peephole
+  optimizations](https://pure.tue.nl/ws/portalfiles/portal/125543109/Thesis_JanekvOirschot.pdf)
+  by van Oirschot
+
+* [Interpreted Pattern Match Execution for
+  MLIR](https://drive.google.com/drive/folders/1hb_sXbdMbIz95X-aaa6Vf5wSYRwsJuve)
+  by Jeff Niu
+
+* [Direct Construction of Minimal Acyclic Subsequential
+  Transducers](http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.24.3698&rep=rep1&type=pdf)
+  by Mihov and Maurel
+
+* [Index 1,600,000,000 Keys with Automata and
+  Rust](https://blog.burntsushi.net/transducers/) and [the `fst`
+  crate](https://crates.io/crates/fst) by Andrew Gallant
+
+## Acknowledgments
+
+Thanks to [Jubi Taneja], [Dan Gohman], [John Regehr], and [Nuno Lopes] for their
+input in design discussions and for sharing helpful resources!
+
+[Jubi Taneja]: https://www.cs.utah.edu/~jubi/
+[Dan Gohman]: https://github.com/sunfishcode
+[John Regehr]: https://www.cs.utah.edu/~regehr/
+[Nuno Lopes]: http://web.ist.utl.pt/nuno.lopes/
