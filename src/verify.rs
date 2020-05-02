@@ -163,7 +163,7 @@ fn canonicalized_lhs_key(lhs: &Lhs) -> impl Hash + Eq {
             DynAstRef::Integer(i) => Integer(i.value),
             DynAstRef::Boolean(b) => Boolean(b.value),
             DynAstRef::ConditionCode(cc) => ConditionCode(cc.cc),
-            DynAstRef::PatternOperation(o) => Operation(o.operator),
+            DynAstRef::PatternOperation(o) => Operation(o.operator, o.r#type.get()),
             DynAstRef::Precondition(p) => Precondition(p.constraint),
             DynAstRef::ConstraintOperand(_) => Other("ConstraintOperand"),
             DynAstRef::Variable(Variable { id, .. }) => {
@@ -189,7 +189,7 @@ fn canonicalized_lhs_key(lhs: &Lhs) -> impl Hash + Eq {
         Integer(i64),
         Boolean(bool),
         ConditionCode(peepmatic_runtime::cc::ConditionCode),
-        Operation(Operator),
+        Operation(Operator, Option<Type>),
         Precondition(Constraint),
         Other(&'static str),
     }
