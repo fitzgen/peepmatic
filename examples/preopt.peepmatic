@@ -176,4 +176,18 @@
 (=> (brnz (icmp_imm eq 0 $x)) (brz $x))
 (=> (brz (icmp_imm eq 0 $x)) (brnz $x))
 
-;; TODO FITZGEN: do_divrem_transformation
+;; Division and remainder by constants.
+;;
+;; Note that this section is incomplete, and a bunch of related optimizations
+;; are still hand-coded in `simple_preopt.rs`.
+
+;; (Division by one is handled above.)
+
+;; Remainder by one is zero.
+(=> (urem_imm 1 $x) 0)
+(=> (srem_imm 1 $x) 0)
+
+;; Division by a power of two -> shift right.
+(=> (when (udiv_imm $C $x)
+          (is-power-of-two $C))
+    (ushr_imm $(log2 $C) $x))
