@@ -1,3 +1,8 @@
+**[`peepmatic` is moving into
+Cranelift!](https://github.com/bytecodealliance/wasmtime/pull/1647)**
+
+--------------------------------------------------------------------------------
+
 <div align="center">
   <h1><code>peepmatic</code></h1>
 
