@@ -1,5 +1,10 @@
-**[`peepmatic` is moving into
-Cranelift!](https://github.com/bytecodealliance/wasmtime/pull/1647)**
+<div align="center">
+  <h1>
+    <a href="https://github.com/bytecodealliance/wasmtime/pull/1647"><code>peepmatic</code> has moved into
+  Cranelift!</a>
+  </h1>
+  <p>This repository is archived now.</p>
+</div>
 
 --------------------------------------------------------------------------------
 
